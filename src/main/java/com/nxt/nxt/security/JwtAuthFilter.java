@@ -4,9 +4,8 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -20,31 +19,62 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
     }
 
+    private static final String[] PUBLIC_URLS = {"/", "/api/auth/**"};
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
+
+
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        for (String publicUrl : PUBLIC_URLS) {
+            if (pathMatcher.match(publicUrl, request.getServletPath())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
+        String token = null;
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("accessToken".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (token != null) {
             String username = jwtUtil.extractUsername(token);
 
             if (jwtUtil.isValidToken(token, username)) {
-                List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
 
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                    new User(username, "", authorities), null, authorities
-                );
+                        username, null, List.of());
 
                 SecurityContextHolder.getContext().setAuthentication(authToken);
-            } else {
+            }
+            
+            else {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid JWT token");
                 return;
             }
         }
+        
+        else {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No token provided");
+            return;
+        }
 
         filterChain.doFilter(request, response);
     }
+
 }

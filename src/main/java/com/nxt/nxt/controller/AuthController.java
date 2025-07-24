@@ -12,8 +12,8 @@ import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.security.JWTUtil;
 
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 
 @RestController
 @RequestMapping("/api/auth")
@@ -40,7 +40,8 @@ public class AuthController {
 
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
-        // System.out.println("Received signin request with credentials: " + credentials);
+        // System.out.println("Received signin request with credentials: " +
+        // credentials);
         Optional<Student> userOpt = Optional.empty();
 
         if (credentials.containsKey("username")) {
@@ -56,18 +57,24 @@ public class AuthController {
             String accessToken = jwtUtil.generateAccessToken(userOpt.get().getUsername());
             String refreshToken = jwtUtil.generateRefreshToken(userOpt.get().getUsername());
 
-            Cookie cookie = new Cookie("refreshToken", refreshToken);
-            cookie.setHttpOnly(true);
-            cookie.setSecure(false);
-            cookie.setPath("/");
-            cookie.setMaxAge(60 * 60 * 24 * 7);
-            response.addCookie(cookie);
+            Cookie refreshCookie = new Cookie("refreshToken", refreshToken);
+            refreshCookie.setHttpOnly(true);
+            refreshCookie.setSecure(false);
+            refreshCookie.setPath("/");
+            refreshCookie.setMaxAge(60 * 60 * 24 * 7);
+
+            response.addCookie(refreshCookie);
+
+            Cookie accessCookie = new Cookie("accessToken", accessToken);
+            accessCookie.setHttpOnly(true);
+            accessCookie.setSecure(false);
+            accessCookie.setPath("/");
+            accessCookie.setMaxAge(60 * 60);
+
+            response.addCookie(accessCookie);
 
             Map<String, Object> result = Map.of(
-                "accessToken", accessToken,
-                "refreshToken", refreshToken,
-                "user", userOpt.get()
-            );
+                    "user", userOpt.get());
 
             return ResponseEntity.ok(result);
         }
@@ -77,30 +84,81 @@ public class AuthController {
 
     @PostMapping("/signout")
     public ResponseEntity<String> signout(HttpServletResponse response) {
+
+        System.out.println("Signing out user, clearing cookies");
+        
         Cookie cookie = new Cookie("refreshToken", null);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
         cookie.setPath("/");
-        cookie.setMaxAge(0); // Expire the cookie
+        cookie.setMaxAge(0);
         response.addCookie(cookie);
+
+        Cookie accessCookie = new Cookie("accessToken", null);
+        accessCookie.setHttpOnly(true);
+        accessCookie.setSecure(false);
+        accessCookie.setPath("/");
+        accessCookie.setMaxAge(0);
+        response.addCookie(accessCookie);
 
         return ResponseEntity.ok("Signed out");
     }
 
-
     @PostMapping("/refresh")
-    public ResponseEntity<?> refresh(@CookieValue(value = "refreshToken", required = false) String refreshToken) {
-        if (refreshToken == null || refreshToken.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Refresh token is missing");
+    public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
+        
+        Cookie[] cookies = request.getCookies();
+        String refreshToken = null;
+
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("refreshToken".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                    break;
+                }
+            }
         }
 
-        String username = jwtUtil.extractUsername(refreshToken);
-        if (username == null || !jwtUtil.isValidToken(refreshToken, username)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token");
+        if (refreshToken != null && jwtUtil.isValidToken(refreshToken, jwtUtil.extractUsername(refreshToken))) {
+            String username = jwtUtil.extractUsername(refreshToken);
+            String newAccessToken = jwtUtil.generateAccessToken(username);
+
+            Cookie accessCookie = new Cookie("accessToken", newAccessToken);
+            accessCookie.setHttpOnly(true);
+            accessCookie.setSecure(true);
+            accessCookie.setPath("/");
+            accessCookie.setMaxAge(60 * 15);
+            response.addCookie(accessCookie);
+
+            return ResponseEntity.ok(Map.of("status", "refreshed"));
         }
 
-        String newAccessToken = jwtUtil.generateAccessToken(username);
-        return ResponseEntity.ok(Map.of("accessToken", newAccessToken));
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token");
     }
-    
+
+
+    @GetMapping("/me")
+    public ResponseEntity<Student> getCurrentUser(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        String accessToken = null;
+
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("accessToken".equals(cookie.getName())) {
+                    accessToken = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (accessToken != null && jwtUtil.isValidToken(accessToken, jwtUtil.extractUsername(accessToken))) {
+            String username = jwtUtil.extractUsername(accessToken);
+            Optional<Student> userOpt = repo.findByUsername(username);
+
+            return userOpt.map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+        }
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    }
 }

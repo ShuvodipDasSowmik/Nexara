@@ -19,10 +19,8 @@ public class JWTUtil {
     public SecretKey REFRESH_TOKEN_SECRET;
 
     public JWTUtil(
-        @Value("${jwt.access.secret}") String accessSecret,
-        @Value("${jwt.refresh.secret}") String refreshSecret
-    )
-    {
+            @Value("${jwt.access.secret}") String accessSecret,
+            @Value("${jwt.refresh.secret}") String refreshSecret) {
         this.ACCESS_TOKEN_SECRET = Keys.hmacShaKeyFor(accessSecret.getBytes());
         this.REFRESH_TOKEN_SECRET = Keys.hmacShaKeyFor(refreshSecret.getBytes());
     }
@@ -54,7 +52,6 @@ public class JWTUtil {
                 .getSubject()
                 .equals(username);
     }
-    
 
     public String extractUsername(String token) {
         return Jwts.parserBuilder()
@@ -64,8 +61,5 @@ public class JWTUtil {
                 .getBody()
                 .getSubject();
     }
-
-
-
 
 }
