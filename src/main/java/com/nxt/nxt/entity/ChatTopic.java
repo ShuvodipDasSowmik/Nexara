@@ -16,6 +16,20 @@ public class ChatTopic {
         this.started_at = started_at;
     }
 
+    public ChatTopic(Integer ct_id, String username, String chat_topic) {
+        this.ct_id = ct_id;
+        this.username = username;
+        this.chat_topic = chat_topic;
+        this.started_at = LocalDateTime.now();
+    }
+
+    
+    public ChatTopic(String username, String chat_topic) {
+        this.username = username;
+        this.chat_topic = chat_topic;
+        this.started_at = LocalDateTime.now();
+    }
+
     public Integer getCt_id() {
         return ct_id;
     }

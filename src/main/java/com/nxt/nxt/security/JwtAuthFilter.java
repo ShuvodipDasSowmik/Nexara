@@ -22,8 +22,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String[] PUBLIC_URLS = {"/", "/api/auth/**"};
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-
-
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         for (String publicUrl : PUBLIC_URLS) {
@@ -47,6 +45,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             for (Cookie cookie : request.getCookies()) {
                 if ("accessToken".equals(cookie.getName())) {
                     token = cookie.getValue();
+                    // System.out.println("Access token: " + token);
                     break;
                 }
             }
@@ -54,6 +53,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (token != null) {
             String username = jwtUtil.extractUsername(token);
+            // System.out.println("Extracted username: " + username);
 
             if (jwtUtil.isValidToken(token, username)) {
 
@@ -70,6 +70,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
         
         else {
+            System.out.println("No token provided");
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No token provided");
             return;
         }
