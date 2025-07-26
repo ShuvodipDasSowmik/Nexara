@@ -18,6 +18,9 @@ public class JWTUtil {
 
     public SecretKey REFRESH_TOKEN_SECRET;
 
+    public int ACCESS_TOKEN_EXPIRY = 1000 * 60 * 60; // 1 hour
+    public int REFRESH_TOKEN_EXPIRY = 1000 * 60 * 60 * 24 * 7; // 7 days
+
     public JWTUtil(
             @Value("${jwt.access.secret}") String accessSecret,
             @Value("${jwt.refresh.secret}") String refreshSecret) {
@@ -29,7 +32,7 @@ public class JWTUtil {
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60))
+                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRY))
                 .signWith(ACCESS_TOKEN_SECRET, SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -38,7 +41,7 @@ public class JWTUtil {
         return Jwts.builder()
                 .setSubject(username)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24))
+                .setExpiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_EXPIRY))
                 .signWith(REFRESH_TOKEN_SECRET, SignatureAlgorithm.HS256)
                 .compact();
     }

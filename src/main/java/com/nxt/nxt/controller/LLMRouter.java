@@ -9,11 +9,14 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import com.nxt.nxt.dto.ChatResponse;
+import com.nxt.nxt.entity.ChatHistory;
 import com.nxt.nxt.entity.ChatTopic;
+import com.nxt.nxt.repositories.ChatHistoryRepository;
 import com.nxt.nxt.repositories.ChatTopicRepository;
 
 import java.util.HashMap;
@@ -25,9 +28,11 @@ import java.util.Map;
 public class LLMRouter {
 
     ChatTopicRepository ctRepository;
+    ChatHistoryRepository chRepository;
 
-    public LLMRouter(ChatTopicRepository ctRepository) {
+    public LLMRouter(ChatTopicRepository ctRepository, ChatHistoryRepository chRepository) {
         this.ctRepository = ctRepository;
+        this.chRepository = chRepository;
     }
 
     @Value("${api.deepseek.key}")
@@ -48,6 +53,9 @@ public class LLMRouter {
 
         if(requestBody.get("ct_id") == null) {
             chatTopicId = logChatTopic(username, requestBody.getOrDefault("message", "").toString());
+        }
+        else{
+            chatTopicId = Integer.parseInt(requestBody.get("ct_id").toString());
         }
 
         Map<String, Object> data = Map.of(
@@ -72,11 +80,16 @@ public class LLMRouter {
         }
         
         else {
+            String msg = response.getChoices().get(0).getMessage().getContent();
             // System.out.println("Response from LLM API: " + response.getChoices().get(0).getMessage().getContent());
-            result.put("message", response.getChoices().get(0).getMessage().getContent());
+            result.put("message", msg);
 
             if(chatTopicId != Integer.MIN_VALUE) {
                 result.put("ct_id", Integer.toString(chatTopicId));
+            }
+
+            if(chatTopicId != Integer.MIN_VALUE && !msg.isEmpty()) {
+                logChatHistory(username, chatTopicId, requestBody.getOrDefault("message", "").toString(), msg);
             }
         }
 
@@ -85,6 +98,7 @@ public class LLMRouter {
     }
 
 
+    // ------------ LOGS CHAT TOPIC AND RETURNS ID ----------------
 
     public int logChatTopic(String username, String message) {
         System.out.println("Received request for chat: " + message);
@@ -94,7 +108,7 @@ public class LLMRouter {
                 "messages", List.of(
                         Map.of(
                                 "role", "user",
-                                "content","Give This message a topic name in max 3 words in plain string, No punctuation or Quotation Mark: " + message)));
+                                "content","Give This message a topic name in max 3 words in plain string, No punctuation or Quotation Mark, But ensure Capitalization for Each word: " + message)));
 
 
         ChatResponse response = webClient.post()
@@ -115,6 +129,14 @@ public class LLMRouter {
     }
 
 
+    // ------------ LOG CHAT HISTORY ----------------
+
+    public void logChatHistory(String username, Integer chatTopicId, String userMsg, String apiResponse) {
+        System.out.println("Logging chat history: " + userMsg + " | " + apiResponse);
+
+        ChatHistory chatHistory = new ChatHistory(chatTopicId, username, userMsg, apiResponse);
+        chRepository.saveChatHistory(chatHistory);
+    }
 
     @GetMapping("/chat/topics")
     public ResponseEntity<List<ChatTopic>> getChatTopics() {
@@ -127,5 +149,16 @@ public class LLMRouter {
         // System.out.println("Retrieved chat topics for user " + username + ": " + chatTopics);
 
         return ResponseEntity.ok(chatTopics);
+    }
+
+
+    @GetMapping("/chat/history")
+    public ResponseEntity<List<ChatHistory>> getChatHistory(@RequestParam("ct_id") Integer ctId) {
+        System.out.println("chat topic id: " + ctId);
+        List<ChatHistory> chatHistory = chRepository.getChatHistoryByChatTopicId(ctId);
+
+        System.out.println("ChatHistory: " + chatHistory);
+
+        return ResponseEntity.ok(chatHistory);
     }
 }
