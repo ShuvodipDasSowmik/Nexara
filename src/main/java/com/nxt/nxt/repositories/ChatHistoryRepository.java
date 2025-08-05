@@ -16,11 +16,13 @@ public class ChatHistoryRepository {
 
     public void saveChatHistory(ChatHistory CH) {
         String sql = "INSERT INTO chat_history (username, ct_id, user_msg, user_msg_time, api_response, api_response_time) VALUES (?, ?, ?, ?, ?, ?)";
+        
         jdbc.update(sql, CH.getUsername(), CH.getCt_id(), CH.getUser_msg(), CH.getUser_msg_time(), CH.getApi_response(), CH.getApi_response_time());
     }
 
     public List<ChatHistory> getChatHistoryByChatTopicId(Integer ct_id) {
         String sql = "SELECT * FROM chat_history WHERE ct_id = ?";
+
         return jdbc.query(sql, (rs, rowNum) -> new ChatHistory(
                 rs.getInt("ch_id"),
                 rs.getString("username"),
