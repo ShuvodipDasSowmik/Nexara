@@ -2,9 +2,16 @@ package com.nxt.nxt.entity;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 
 public class ChatHistory {
-    private static final DateTimeFormatter DB_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+
+    private static final DateTimeFormatter DB_FORMATTER = new DateTimeFormatterBuilder()
+    .appendPattern("yyyy-MM-dd HH:mm:ss")
+    .appendFraction(ChronoField.MICRO_OF_SECOND, 0, 6, true)
+    .toFormatter();
+    
     private Integer ch_id;
     private String username;
     private Integer ct_id;
