@@ -31,5 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+!.vscode/settings.json
 
+### Test Files ###
+test-*.json
 src/main/resources/application.properties

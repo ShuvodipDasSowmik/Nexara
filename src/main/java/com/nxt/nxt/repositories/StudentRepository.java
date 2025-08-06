@@ -22,7 +22,7 @@ public class StudentRepository {
     public void save(Student s) {
         jdbc.update(
             "INSERT INTO students (id, full_name, username, password, institute, education_level, email) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            UUID.randomUUID(), s.getFullName(), s.getUsername(), s.getPassword(), s.getInstitute(), s.getEducationLevel(), s.getEmail()
+            s.getId(), s.getFullName(), s.getUsername(), s.getPassword(), s.getInstitute(), s.getEducationLevel(), s.getEmail()
         );
     }
 
