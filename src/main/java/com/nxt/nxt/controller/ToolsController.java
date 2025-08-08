@@ -1,6 +1,7 @@
 package com.nxt.nxt.controller;
 
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -13,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.nxt.nxt.entity.PdfData;
 import com.nxt.nxt.util.EmbeddingAPI;
 import com.nxt.nxt.util.PDFUtilities;
+import com.nxt.nxt.util.VectorDB;
 
 @RestController
 @RequestMapping("/api/tools")
@@ -22,6 +24,9 @@ public class ToolsController {
 
     @Autowired
     EmbeddingAPI embeddingAPI;
+
+    @Autowired
+    VectorDB vectorDB;
 
     @PostMapping("/pdf-parser")
     public ResponseEntity<?> PDFParser(@RequestParam("file") MultipartFile file){
@@ -36,6 +41,10 @@ public class ToolsController {
 
             List<Double> embedding = embeddingAPI.getTextEmbedding(pdfData.getFullText());
             System.out.println("PDF embedding: " + embedding);
+
+            Long pointId = System.currentTimeMillis();
+
+            vectorDB.upsertData(pointId, embedding);
 
             return ResponseEntity.ok(pdfData);
         }
