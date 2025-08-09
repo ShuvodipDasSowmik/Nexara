@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nxt.nxt.dto.ChatResponse;
 import com.nxt.nxt.dto.ExamGenerationRequest;
+import com.nxt.nxt.dto.QuestionDTO;
 import com.nxt.nxt.entity.Exam;
 import com.nxt.nxt.entity.Question;
 import com.nxt.nxt.entity.Student;
@@ -86,6 +87,23 @@ public class ExamService {
         return exam.getId();
     }
 
+    public List<QuestionDTO> getExamQuestions(Integer examId) {
+        // Fetching questions and maping to DTOs hiding correct answers
+        List<Question> questions = questionRepository.findByExamId(examId);
+        List<QuestionDTO> result = new ArrayList<>(questions.size());
+        for (Question q : questions) {
+            result.add(new QuestionDTO(
+                q.getId(),
+                q.getQuestionText(),
+                q.getOptionA(),
+                q.getOptionB(),
+                q.getOptionC(),
+                q.getOptionD()
+            ));
+        }
+        return result;
+    }
+    //now only generating 5 question will change it later
     private String createPrompt(String inputText) {
         return String.format("""
             Generate 5 multiple choice questions about: %s

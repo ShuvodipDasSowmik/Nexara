@@ -2,6 +2,7 @@ package com.nxt.nxt.controller;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,6 +33,9 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<String> signup(@RequestBody Student student) {
         // System.out.println("Received signup request for: " + student);
+        if (student.getId() == null) {
+            student.setId(UUID.randomUUID());
+        }
         student.setPassword(encoder.encode(student.getPassword()));
 
         repo.save(student);

@@ -1,12 +1,17 @@
 package com.nxt.nxt.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nxt.nxt.dto.ExamGenerationRequest;
+import com.nxt.nxt.dto.QuestionDTO;
 import com.nxt.nxt.service.ExamService;
 
 @RestController
@@ -27,6 +32,12 @@ public class ExamController {
             return ResponseEntity.internalServerError()
                 .body("Error generating exam: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/{examId}/questions")
+    public ResponseEntity<List<QuestionDTO>> getExamQuestions(@PathVariable Integer examId) {
+        List<QuestionDTO> questions = examService.getExamQuestions(examId);
+        return ResponseEntity.ok(questions);
     }
 
     // Response DTO for exam generation
