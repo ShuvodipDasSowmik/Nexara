@@ -10,8 +10,11 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nxt.nxt.dto.ChatResponse;
+import com.nxt.nxt.dto.EvaluationDetailDTO;
+import com.nxt.nxt.dto.EvaluationResultDTO;
 import com.nxt.nxt.dto.ExamGenerationRequest;
 import com.nxt.nxt.dto.QuestionDTO;
+import com.nxt.nxt.dto.SubmitAnswerDTO;
 import com.nxt.nxt.entity.Exam;
 import com.nxt.nxt.entity.Question;
 import com.nxt.nxt.entity.Student;
@@ -103,6 +106,92 @@ public class ExamService {
         }
         return result;
     }
+
+    public EvaluationResultDTO evaluateExam(Integer examId, List<SubmitAnswerDTO> answers) {
+        // Load questions for exam
+        List<Question> questions = questionRepository.findByExamId(examId);
+        if (answers == null) {
+            answers = java.util.Collections.emptyList();
+        }
+        // Maps for lookup
+        var correctById = new java.util.HashMap<Integer, String>();
+        var questionById = new java.util.HashMap<Integer, Question>();
+        for (Question q : questions) {
+            correctById.put(q.getId(), q.getCorrectAnswer());
+            questionById.put(q.getId(), q);
+        }
+
+        List<EvaluationDetailDTO> details = new ArrayList<>();
+        int score = 0;
+        for (SubmitAnswerDTO ans : answers) {
+            String correct = correctById.get(ans.getQuestionId());
+            String correctNorm = normalizeAnswer(correct);
+            String selectedNorm = normalizeAnswer(ans.getSelected());
+
+            //  if selected is not a clean letter, trying to resolve from option text
+            if (selectedNorm == null) {
+                Question q = questionById.get(ans.getQuestionId());
+                if (q != null && ans.getSelected() != null) {
+                    String sel = ans.getSelected().trim();
+                    if (sel.equalsIgnoreCase(q.getOptionA())) selectedNorm = "A";
+                    else if (sel.equalsIgnoreCase(q.getOptionB())) selectedNorm = "B";
+                    else if (sel.equalsIgnoreCase(q.getOptionC())) selectedNorm = "C";
+                    else if (sel.equalsIgnoreCase(q.getOptionD())) selectedNorm = "D";
+                }
+            }
+            boolean isCorrect = correctNorm != null && correctNorm.equals(selectedNorm);
+            if (isCorrect) score++;
+            details.add(new EvaluationDetailDTO(
+                ans.getQuestionId(),
+                isCorrect,
+                correctNorm,
+                selectedNorm
+            ));
+        }
+
+        EvaluationResultDTO result = new EvaluationResultDTO(score, questions.size(), details);
+        return result;
+    }
+
+    private String normalizeAnswer(String s) {
+        if (s == null) return null;
+        s = s.trim();
+        if (s.isEmpty()) return null;
+        // Only keep first letter A-D if longer strings accidentally stored
+        char c = Character.toUpperCase(s.charAt(0));
+        if (c >= 'A' && c <= 'D') return String.valueOf(c);
+        //  try to infer from words
+        String up = s.toUpperCase();
+        if (up.startsWith("OPTION A") || up.equals("A")) return "A";
+        if (up.startsWith("OPTION B") || up.equals("B")) return "B";
+        if (up.startsWith("OPTION C") || up.equals("C")) return "C";
+        if (up.startsWith("OPTION D") || up.equals("D")) return "D";
+        return s.length() == 1 ? String.valueOf(c) : null;
+    }
+
+    private int resolveCorrectIndex(String fullAnswer, List<String> options) {
+        if (options == null || options.isEmpty()) return 0;
+        if (fullAnswer == null || fullAnswer.trim().isEmpty()) return 0;
+        String norm = normalizeAnswer(fullAnswer);
+        if (norm != null) {
+            char c = norm.charAt(0);
+            int idx = c - 'A';
+            if (idx >= 0 && idx < options.size()) return idx;
+        }
+        // Try exact text match
+        for (int i = 0; i < options.size(); i++) {
+            if (options.get(i) != null && options.get(i).equalsIgnoreCase(fullAnswer)) return i;
+        }
+        // Try contains either way
+        String faLower = fullAnswer.toLowerCase();
+        for (int i = 0; i < options.size(); i++) {
+            String opt = options.get(i);
+            if (opt == null) continue;
+            String ol = opt.toLowerCase();
+            if (ol.contains(faLower) || faLower.contains(ol)) return i;
+        }
+        return 0;
+    }
     //now only generating 5 question will change it later
     private String createPrompt(String inputText) {
         return String.format("""
@@ -144,18 +233,34 @@ public class ExamService {
                     Question question = new Question();
                     question.setQuestionText(questionNode.get("questionText").asText());
                     
-                    // Convert options array to comma-separated string
+                    // Read options (original order)
                     JsonNode optionsNode = questionNode.get("options");
                     List<String> optionsList = new ArrayList<>();
                     for (JsonNode option : optionsNode) {
                         optionsList.add(option.asText());
                     }
-                    question.setOptions(String.join(",", optionsList));
-                    
-                    // Convert full text answer to option letter (A, B, C, D)
+
                     String fullAnswer = questionNode.get("correctAnswer").asText();
-                    String optionLetter = convertAnswerToOptionLetter(fullAnswer, optionsList);
-                    question.setCorrectAnswer(optionLetter);
+                    // 1) Finding correct index in original list using text or explicit letter like 'Option A'
+                    int correctIndexOriginal = resolveCorrectIndex(fullAnswer, optionsList);
+                    if (correctIndexOriginal < 0 || correctIndexOriginal >= optionsList.size()) {
+                        correctIndexOriginal = 0; // fallback
+                    }
+                    String correctOptionText = optionsList.get(correctIndexOriginal);
+
+                    // 2) Shuffle and set options
+                    java.util.Collections.shuffle(optionsList);
+                    question.setOptions(String.join(",", optionsList));
+
+                    // 3) Find new index of the correct option text after shuffle and set letter
+                    int newIndex = 0;
+                    for (int i = 0; i < optionsList.size(); i++) {
+                        if (optionsList.get(i).equalsIgnoreCase(correctOptionText)) {
+                            newIndex = i;
+                            break;
+                        }
+                    }
+                    question.setCorrectAnswer(String.valueOf((char)('A' + newIndex)));
                     
                     questions.add(question);
                 }

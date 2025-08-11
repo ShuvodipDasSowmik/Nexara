@@ -10,8 +10,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nxt.nxt.dto.EvaluationResultDTO;
 import com.nxt.nxt.dto.ExamGenerationRequest;
 import com.nxt.nxt.dto.QuestionDTO;
+import com.nxt.nxt.dto.SubmitAnswerDTO;
 import com.nxt.nxt.service.ExamService;
 
 @RestController
@@ -38,6 +40,15 @@ public class ExamController {
     public ResponseEntity<List<QuestionDTO>> getExamQuestions(@PathVariable Integer examId) {
         List<QuestionDTO> questions = examService.getExamQuestions(examId);
         return ResponseEntity.ok(questions);
+    }
+
+    @PostMapping("/{examId}/submit")
+    public ResponseEntity<EvaluationResultDTO> submitExam(
+        @PathVariable Integer examId,
+        @RequestBody List<SubmitAnswerDTO> answers
+    ) {
+        EvaluationResultDTO result = examService.evaluateExam(examId, answers);
+        return ResponseEntity.ok(result);
     }
 
     // Response DTO for exam generation
