@@ -12,18 +12,20 @@ public class PdfData {
     private String keywords;
     private String fullText;
     private int totalPages;
+    private String username; // Foreign key to students table
     private List<PageInfo> pages = new ArrayList<>();
 
     // Constructors
     public PdfData() {}
 
-    public PdfData(String title, String author, String subject, String keywords, String fullText, int totalPages) {
+    public PdfData(String title, String author, String subject, String keywords, String fullText, int totalPages, String username) {
         this.title = title;
         this.author = author;
         this.subject = subject;
         this.keywords = keywords;
         this.fullText = fullText;
         this.totalPages = totalPages;
+        this.username = username;
     }
 
     // Getters and Setters
@@ -48,6 +50,9 @@ public class PdfData {
 
     public int getTotalPages() { return totalPages; }
     public void setTotalPages(int totalPages) { this.totalPages = totalPages; }
+
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
     public List<PageInfo> getPages() { return pages; }
     public void setPages(List<PageInfo> pages) {
