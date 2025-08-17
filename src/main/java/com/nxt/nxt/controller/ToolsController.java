@@ -65,7 +65,7 @@ public class ToolsController {
                 for (PageInfo page : pages) {
                     Long pointId = System.currentTimeMillis() + page.getPageNumber();
                     List<Double> pageEmbedding = embeddingAPI.getTextEmbedding(page.getText());
-                    vectorDB.upsertData(pointId, pageEmbedding);
+                    vectorDB.upsertData(pointId, pageEmbedding, page.getText(), username);
                 }
             }
 

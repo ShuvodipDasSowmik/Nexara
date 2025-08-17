@@ -155,14 +155,26 @@ public class AuthController {
             }
         }
 
-        if (accessToken != null && jwtUtil.isValidToken(accessToken, jwtUtil.extractUsername(accessToken))) {
-            String username = jwtUtil.extractUsername(accessToken);
-            Optional<Student> userOpt = repo.findByUsername(username);
+        if (accessToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
 
+        try {
+            // parse username once and validate token; parsing can throw if token invalid/expired
+            String username = jwtUtil.extractUsername(accessToken);
+            
+            if (!jwtUtil.isValidToken(accessToken, username)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+
+            Optional<Student> userOpt = repo.findByUsername(username);
             return userOpt.map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
         }
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        
+        catch (Exception e) {
+            // token parsing/validation failed
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
     }
 }
