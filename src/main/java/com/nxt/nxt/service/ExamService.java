@@ -1,3 +1,4 @@
+
 package com.nxt.nxt.service;
 
 import java.time.LocalDateTime;
@@ -21,6 +22,7 @@ import com.nxt.nxt.entity.Student;
 import com.nxt.nxt.repositories.ExamRepository;
 import com.nxt.nxt.repositories.QuestionRepository;
 import com.nxt.nxt.repositories.StudentRepository;
+import com.nxt.nxt.repositories.StudentBestScoreRepository;
 
 @Service
 public class ExamService {
@@ -28,16 +30,19 @@ public class ExamService {
     private final ExamRepository examRepository;
     private final QuestionRepository questionRepository;
     private final StudentRepository studentRepository;
+    private final StudentBestScoreRepository studentBestScoreRepository;
     private final ObjectMapper objectMapper;
 
     public ExamService(OpenRouterService openRouterService, 
                       ExamRepository examRepository, 
                       QuestionRepository questionRepository,
-                      StudentRepository studentRepository) {
+                      StudentRepository studentRepository,
+                      StudentBestScoreRepository studentBestScoreRepository) {
         this.openRouterService = openRouterService;
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.studentRepository = studentRepository;
+        this.studentBestScoreRepository = studentBestScoreRepository;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -107,7 +112,13 @@ public class ExamService {
         return result;
     }
 
-    public EvaluationResultDTO evaluateExam(Integer examId, List<SubmitAnswerDTO> answers) {
+    public EvaluationResultDTO evaluateExam(Integer examId, List<SubmitAnswerDTO> answers, UUID studentId) {
+        // Check if student already took this exam
+        if (studentBestScoreRepository.findByStudentIdAndExamId(studentId, examId).isPresent()) {
+            // Already taken, do not allow again
+            return null;
+        }
+
         // Load questions for exam
         List<Question> questions = questionRepository.findByExamId(examId);
         if (answers == null) {
@@ -148,6 +159,12 @@ public class ExamService {
                 selectedNorm
             ));
         }
+
+        // Calculate percentage
+        double percentage = questions.size() > 0 ? (score * 100.0 / questions.size()) : 0.0;
+        // Save best score for this student and exam
+        com.nxt.nxt.entity.StudentBestScore bestScore = new com.nxt.nxt.entity.StudentBestScore(studentId, examId, java.math.BigDecimal.valueOf(percentage));
+        studentBestScoreRepository.save(bestScore);
 
         EvaluationResultDTO result = new EvaluationResultDTO(score, questions.size(), details);
         return result;
@@ -398,5 +415,8 @@ public class ExamService {
         // Default to 'A' if no match found
         System.err.println("Could not match answer '" + fullAnswer + "' to any option, defaulting to 'A'");
         return "A";
+    }
+    public Exam getExamById(Integer examId) {
+        return examRepository.findById(examId).orElse(null);
     }
 }

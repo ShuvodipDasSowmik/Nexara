@@ -43,11 +43,20 @@ public class ExamController {
     }
 
     @PostMapping("/{examId}/submit")
-    public ResponseEntity<EvaluationResultDTO> submitExam(
+    public ResponseEntity<?> submitExam(
         @PathVariable Integer examId,
         @RequestBody List<SubmitAnswerDTO> answers
     ) {
-        EvaluationResultDTO result = examService.evaluateExam(examId, answers);
+        // Find the exam to get the studentId
+        com.nxt.nxt.entity.Exam exam = examService.getExamById(examId);
+        if (exam == null) {
+            return ResponseEntity.badRequest().body("Exam not found");
+        }
+        java.util.UUID studentId = exam.getStudentId();
+        EvaluationResultDTO result = examService.evaluateExam(examId, answers, studentId);
+        if (result == null) {
+            return ResponseEntity.status(403).body("You have already taken this exam. You cannot retake it.");
+        }
         return ResponseEntity.ok(result);
     }
 
