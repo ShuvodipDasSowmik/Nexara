@@ -33,10 +33,8 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseEntity<String> handleAllUncaughtException(Exception ex) {
         // Log the exception (in real apps, use a logger)
-        ex.printStackTrace();
+        // ex.printStackTrace();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("An unexpected error occurred. Please try again later.");
     }
 }
-SELECT *
-from student_best_score
