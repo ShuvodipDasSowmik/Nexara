@@ -18,6 +18,8 @@ import com.nxt.nxt.entity.ChatHistory;
 import com.nxt.nxt.entity.ChatTopic;
 import com.nxt.nxt.repositories.ChatHistoryRepository;
 import com.nxt.nxt.repositories.ChatTopicRepository;
+import com.nxt.nxt.util.EmbeddingAPI;
+import com.nxt.nxt.util.VectorDB;
 
 import java.util.HashMap;
 import java.util.List;
@@ -30,9 +32,17 @@ public class LLMRouter {
     ChatTopicRepository ctRepository;
     ChatHistoryRepository chRepository;
 
-    public LLMRouter(ChatTopicRepository ctRepository, ChatHistoryRepository chRepository) {
+    private final EmbeddingAPI embeddingAPI;
+    private final VectorDB vectorDB;
+
+    public LLMRouter(ChatTopicRepository ctRepository,
+                     ChatHistoryRepository chRepository,
+                     EmbeddingAPI embeddingAPI,
+                     VectorDB vectorDB) {
         this.ctRepository = ctRepository;
         this.chRepository = chRepository;
+        this.embeddingAPI = embeddingAPI;
+        this.vectorDB = vectorDB;
     }
 
     @Value("${api.deepseek.key}")
@@ -160,5 +170,87 @@ public class LLMRouter {
         System.out.println("ChatHistory: " + chatHistory);
 
         return ResponseEntity.ok(chatHistory);
+    }
+
+    // New: context-aware chat endpoint
+    @PostMapping("/context-aware-chat")
+    public ResponseEntity<Map<String, String>> contextAwareChat(@RequestBody Map<String, Object> requestBody) {
+        
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        String userMessage = requestBody.getOrDefault("message", "").toString();
+
+        int chatTopicId = Integer.MIN_VALUE;
+
+        if (requestBody.get("ct_id") == null) {
+            chatTopicId = logChatTopic(username, userMessage);
+        }
+        else {
+            chatTopicId = Integer.parseInt(requestBody.get("ct_id").toString());
+        }
+
+        try {
+            // 1) Generate embedding for the user's message
+            List<Double> embedding = embeddingAPI.getTextEmbedding(userMessage);
+
+            // 2) Search vector DB for top-3 similar texts for this user
+            List<String> contexts = vectorDB.getSimilarTextsForUser(embedding, username, 2);
+
+            // 3) Build context string (if any) to include in the prompt
+            StringBuilder contextBuilder = new StringBuilder();
+            if (contexts != null && !contexts.isEmpty()) {
+                contextBuilder.append("Contextual excerpts from your documents:\n");
+                int idx = 1;
+                for (String ctx : contexts) {
+                    contextBuilder.append("Excerpt ").append(idx++).append(": ").append(ctx).append("\n\n");
+                }
+            }
+
+            String systemContent = contextBuilder.length() > 0
+                    ? contextBuilder.toString()
+                    : "No additional context available.";
+
+            // 4) Build messages with context as a system message followed by user message
+            Map<String, Object> data = Map.of(
+                    "model", "deepseek/deepseek-chat-v3-0324:free",
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemContent),
+                            Map.of("role", "user", "content", userMessage)
+                    )
+            );
+
+            ChatResponse response = webClient.post()
+                    .uri(URL)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(ChatResponse.class)
+                    .block();
+
+            Map<String, String> result = new HashMap<>();
+            if (response == null || response.getChoices() == null || response.getChoices().isEmpty()) {
+                result.put("message", "");
+            } else {
+                String msg = response.getChoices().get(0).getMessage().getContent();
+                result.put("message", msg);
+
+                if (chatTopicId != Integer.MIN_VALUE) {
+                    result.put("ct_id", Integer.toString(chatTopicId));
+                }
+
+                if (chatTopicId != Integer.MIN_VALUE && !msg.isEmpty()) {
+                    logChatHistory(username, chatTopicId, userMessage, msg);
+                }
+            }
+
+            return ResponseEntity.ok(result);
+        }
+        
+        catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("message", "Error: " + e.getMessage()));
+        }
     }
 }
