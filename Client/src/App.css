@@ -1,0 +1,8 @@
+.chat-page {
+  /* Remove these lines to allow scrolling */
+  /* overflow: hidden; */
+  /* overscroll-behavior: none; */
+  /* position: fixed; */
+  /* inset: 0; */
+  /* max-height: 100vh; */
+}
