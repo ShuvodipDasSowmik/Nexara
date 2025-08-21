@@ -83,6 +83,7 @@ export default function Header() {
 					<nav className="hidden sm:flex gap-3 text-gray-300">
 						<Link to="/chat" className="hover:text-white">Chat</Link>
 						<Link to="/tools" className="hover:text-white">Tools</Link>
+						<Link to="/community/posts" className="hover:text-white">Community</Link>
 					</nav>
 
 					{/* profile area: render cached/optimistic user immediately, update when real user arrives */}
@@ -118,12 +119,20 @@ export default function Header() {
 							</button>
 						</div>
 					) : (
-						// lightweight placeholder shown when there's no cached user
-						<div className="flex items-center gap-2">
-							<div className="w-9 h-9 rounded-full bg-gray-700/40 animate-pulse border border-gray-700" />
-							<div className="hidden sm:block">
-								<span className="w-20 h-3 bg-gray-700/40 rounded animate-pulse inline-block" />
-							</div>
+						// show a single sign in / sign up link when not authenticated
+						<div className="flex items-center">
+							<Link
+								to="/signup"
+								aria-label="Sign in or sign up"
+								className="relative inline-block group text-sm text-white px-2 py-1"
+							>
+								<span className="relative z-10">Sign in / Sign up</span>
+								{/* underline that grows from center */}
+								<span
+									aria-hidden="true"
+									className="absolute inset-x-0 bottom-0 h-[2px] bg-white origin-center transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"
+								/>
+							</Link>
 						</div>
 					)}
 				</div>

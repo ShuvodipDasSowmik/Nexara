@@ -67,7 +67,6 @@ const Home = () => {
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-900 via-purple-900 to-gray-900">
-            <Header />
             <main className="flex-1 flex flex-col items-center justify-start px-4 pt-16 pb-8 relative">
                 <div className="absolute inset-0 pointer-events-none z-0">
                     <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-tr from-blue-600/30 via-purple-600/20 to-transparent rounded-full blur-2xl"></div>

@@ -89,9 +89,9 @@ const UserDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col items-center px-2 pt-8">
-            <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {/* User Info Panel */}
-                <section className="col-span-1 md:col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-fit">
+                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-fit">
                     <div className="flex items-center justify-between mb-6">
                         <h1 className="text-2xl font-bold text-white">Welcome, {user?.fullName}</h1>
                         <button
@@ -116,14 +116,16 @@ const UserDashboard = () => {
                             <div className="mt-2 text-sm text-blue-300 text-center font-semibold">{user.progressLabel}</div>
                         </>
                     )}
+                </section>
 
-                    {/* Bar chart below progress bar */}
+                {/* Chart Panel */}
+                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-fit">
                     <LastFiveScoresChart />
                 </section>
 
                 {/* PDFs Panel */}
                 <section
-                    className="col-span-1 md:col-span-2 bg-gray-800/60 rounded-2xl p-6 flex flex-col shadow-sm"
+                    className="col-span-1 lg:col-span-1 bg-gray-800/60 rounded-2xl p-6 flex flex-col shadow-sm"
                     style={{ maxHeight: "600px", overflowY: "auto" }}
                 >
                     <h2 className="text-xl font-semibold text-white mb-4">Your PDFs</h2>

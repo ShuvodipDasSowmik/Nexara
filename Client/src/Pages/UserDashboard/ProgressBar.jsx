@@ -4,7 +4,7 @@ export default function ProgressBar({ percentage }) {
   return (
     <div className="w-full mt-4">
       <div className="flex justify-between mb-1">
-        <span className="text-sm font-medium text-blue-400">Progress</span>
+        <span className="text-sm font-medium text-blue-400">Avg Score of Last 5 Exams</span>
         <span className="text-sm font-medium text-blue-400">{percentage}%</span>
       </div>
       <div className="w-full bg-gray-700 rounded-full h-4">

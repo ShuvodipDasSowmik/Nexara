@@ -42,7 +42,7 @@ export default function LastFiveScoresChart() {
   }));
 
   return (
-    <div className="w-full max-w-xl mx-auto my-8 bg-gray-800/90 rounded-2xl p-6 border border-gray-700" style={{ boxShadow: 'none' }}>
+    <div className="w-full">
       <h2 className="text-xl font-bold text-white mb-4 tracking-wide">Last 5 Exam Scores</h2>
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={chartData} barCategoryGap={30}>

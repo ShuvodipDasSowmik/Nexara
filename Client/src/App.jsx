@@ -13,17 +13,21 @@ import Tools from './Pages/ToolsPages/Tools'
 import Home from './Pages/Home'
 import Header from './Components/SiteChrome/Header'
 import Footer from './Components/SiteChrome/Footer'
+import Posts from './Pages/Community/Posts'
 
 function App() {
   return (
     <>
       <AuthProvider>
         <BrowserRouter>
+          <Header />
+
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:ct_id" element={<Chat />} />
             <Route path="/signup" element={<SignUp />} />
+            <Route path="/community/posts" element={<Posts />} />
             <Route
               path="/user/dashboard"
               element={
