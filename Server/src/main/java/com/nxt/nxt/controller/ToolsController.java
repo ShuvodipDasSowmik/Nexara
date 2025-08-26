@@ -1,6 +1,8 @@
 package com.nxt.nxt.controller;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,9 +65,18 @@ public class ToolsController {
             List<PageInfo> pages = pdfData.getPages();
             if (pages != null) {
                 for (PageInfo page : pages) {
+                    // Debug: print the raw PageInfo and text length
+                    System.out.println("PageInfo: " + page);
+                    System.out.println("Page " + page.getPageNumber() + " text length: " + (page.getText() != null ? page.getText().length() : 0));
+                    
                     Long pointId = System.currentTimeMillis() + page.getPageNumber();
                     List<Double> pageEmbedding = embeddingAPI.getTextEmbedding(page.getText());
-                    vectorDB.upsertData(pointId, pageEmbedding, page.getText(), username);
+                    // Debug: print the text being inserted
+                    System.out.println("Inserting to VectorDB - page " + page.getPageNumber() + ": " + page.getText());
+                    Map<String, String> payload = new HashMap<>();
+                    payload.put("pdfdata", "TRUE");
+                    payload.put("text", page.getText());
+                    vectorDB.upsertWithKeywords(pointId, pageEmbedding, username, payload);
                 }
             }
 

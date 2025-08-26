@@ -55,7 +55,7 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
         setLoading(true);
         try {
             const response = await API.get(`/posts/${post.id}/comments`);
-            setComments(response.data);
+            setComments(response.data); // Each comment now has studentName
         } catch (error) {
             console.error('Error fetching comments:', error);
             showNotification('Failed to load comments. Please try again.', 'error');

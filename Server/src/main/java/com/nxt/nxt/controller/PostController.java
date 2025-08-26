@@ -1,10 +1,13 @@
 package com.nxt.nxt.controller;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,6 +20,8 @@ import com.nxt.nxt.repositories.PostRepository;
 import com.nxt.nxt.repositories.PostVoteRepository;
 import com.nxt.nxt.repositories.CommentRepository;
 import com.nxt.nxt.repositories.StudentRepository;
+import com.nxt.nxt.util.EmbeddingAPI;
+import com.nxt.nxt.util.VectorDB;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -26,6 +31,12 @@ public class PostController {
     private final PostVoteRepository postVoteRepository;
     private final CommentRepository commentRepository;
     private final StudentRepository studentRepository;
+
+    @Autowired
+    EmbeddingAPI embeddingAPI;
+
+    @Autowired
+    VectorDB vectorDB;
 
     public PostController(PostRepository postRepository, PostVoteRepository postVoteRepository, 
                          CommentRepository commentRepository, StudentRepository studentRepository) {
@@ -65,9 +76,25 @@ public class PostController {
             System.out.println("Creating post: " + post.toString());
             
             postRepository.save(post);
-            
+
             System.out.println("Post created successfully with ID: " + post.getId());
-            
+
+            // Insert post into VectorDB with "post" keyword TRUE and content in "text"
+            try {
+                Long pointId = System.currentTimeMillis();
+                String postText = post.getContent();
+                List<Double> postEmbedding = embeddingAPI.getTextEmbedding(postText);
+
+                Map<String, String> payload = new HashMap<>();
+                payload.put("post", "TRUE");
+                payload.put("text", postText);
+
+                vectorDB.upsertWithKeywords(pointId, postEmbedding, post.getStudentId().toString(), payload);
+            } catch (Exception ex) {
+                System.out.println("Error inserting post into VectorDB: " + ex.getMessage());
+                ex.printStackTrace();
+            }
+
             return ResponseEntity.status(HttpStatus.CREATED).body(post);
         } catch (Exception e) {
             System.err.println("Error creating post: " + e.getMessage());
@@ -191,55 +218,92 @@ public class PostController {
     // COMMENT CRUD OPERATIONS
 
     @PostMapping("/{postId}/comments")
-    public ResponseEntity<Comment> createComment(@PathVariable UUID postId, @RequestBody Comment comment) {
+    public ResponseEntity<CommentWithStudentName> createComment(@PathVariable UUID postId, @RequestBody Comment comment) {
         try {
             comment.setId(UUID.randomUUID());
             comment.setPostId(postId);
             comment.setCreatedAt(LocalDateTime.now());
             comment.setUpdatedAt(LocalDateTime.now());
             commentRepository.save(comment);
-            return ResponseEntity.status(HttpStatus.CREATED).body(comment);
+
+            // Fetch student name
+            String studentName = studentRepository.findById(comment.getStudentId())
+                .map(Student::getFullName)
+                .orElse("Unknown User");
+
+            CommentWithStudentName dto = new CommentWithStudentName(comment, studentName);
+            return ResponseEntity.status(HttpStatus.CREATED).body(dto);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @GetMapping("/{postId}/comments")
-    public ResponseEntity<List<Comment>> getCommentsByPostId(@PathVariable UUID postId) {
+    public ResponseEntity<List<CommentWithStudentName>> getCommentsByPostId(@PathVariable UUID postId) {
         try {
             List<Comment> comments = commentRepository.findByPostId(postId);
-            return ResponseEntity.ok(comments);
+            List<CommentWithStudentName> dtos = comments.stream()
+                .map(c -> {
+                    String studentName = studentRepository.findById(c.getStudentId())
+                        .map(Student::getFullName)
+                        .orElse("Unknown User");
+                    return new CommentWithStudentName(c, studentName);
+                })
+                .toList();
+            return ResponseEntity.ok(dtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @GetMapping("/{postId}/comments/top-level")
-    public ResponseEntity<List<Comment>> getTopLevelComments(@PathVariable UUID postId) {
+    public ResponseEntity<List<CommentWithStudentName>> getTopLevelComments(@PathVariable UUID postId) {
         try {
             List<Comment> comments = commentRepository.findTopLevelCommentsByPostId(postId);
-            return ResponseEntity.ok(comments);
+            List<CommentWithStudentName> dtos = comments.stream()
+                .map(c -> {
+                    String studentName = studentRepository.findById(c.getStudentId())
+                        .map(Student::getFullName)
+                        .orElse("Unknown User");
+                    return new CommentWithStudentName(c, studentName);
+                })
+                .toList();
+            return ResponseEntity.ok(dtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @GetMapping("/comments/{commentId}/replies")
-    public ResponseEntity<List<Comment>> getReplies(@PathVariable UUID commentId) {
+    public ResponseEntity<List<CommentWithStudentName>> getReplies(@PathVariable UUID commentId) {
         try {
             List<Comment> replies = commentRepository.findRepliesByParentId(commentId);
-            return ResponseEntity.ok(replies);
+            List<CommentWithStudentName> dtos = replies.stream()
+                .map(c -> {
+                    String studentName = studentRepository.findById(c.getStudentId())
+                        .map(Student::getFullName)
+                        .orElse("Unknown User");
+                    return new CommentWithStudentName(c, studentName);
+                })
+                .toList();
+            return ResponseEntity.ok(dtos);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
     @GetMapping("/comments/{id}")
-    public ResponseEntity<Comment> getCommentById(@PathVariable UUID id) {
+    public ResponseEntity<CommentWithStudentName> getCommentById(@PathVariable UUID id) {
         try {
             Optional<Comment> comment = commentRepository.findById(id);
-            return comment.map(ResponseEntity::ok)
-                         .orElse(ResponseEntity.notFound().build());
+            if (comment.isPresent()) {
+                String studentName = studentRepository.findById(comment.get().getStudentId())
+                    .map(Student::getFullName)
+                    .orElse("Unknown User");
+                CommentWithStudentName dto = new CommentWithStudentName(comment.get(), studentName);
+                return ResponseEntity.ok(dto);
+            }
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -331,6 +395,26 @@ public class PostController {
         public UUID getStudentId() { return post.getStudentId(); }
         public LocalDateTime getCreatedAt() { return post.getCreatedAt(); }
         public LocalDateTime getUpdatedAt() { return post.getUpdatedAt(); }
+        public String getStudentName() { return studentName; }
+    }
+
+    // Helper class to include student name with comment
+    public static class CommentWithStudentName {
+        private final Comment comment;
+        private final String studentName;
+
+        public CommentWithStudentName(Comment comment, String studentName) {
+            this.comment = comment;
+            this.studentName = studentName;
+        }
+
+        public UUID getId() { return comment.getId(); }
+        public UUID getPostId() { return comment.getPostId(); }
+        public UUID getStudentId() { return comment.getStudentId(); }
+        public String getContent() { return comment.getContent(); }
+        public LocalDateTime getCreatedAt() { return comment.getCreatedAt(); }
+        public LocalDateTime getUpdatedAt() { return comment.getUpdatedAt(); }
+        public UUID getParentId() { return comment.getParentId(); }
         public String getStudentName() { return studentName; }
     }
 }

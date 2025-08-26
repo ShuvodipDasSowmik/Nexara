@@ -55,7 +55,6 @@ public class LLMRouter {
 
     @PostMapping("/chat")
     public ResponseEntity<Map<String, String>> chatCompletion(@RequestBody Map<String, Object> requestBody) {
-        // System.out.println("Received request for chat completion: " + requestBody);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
@@ -68,42 +67,72 @@ public class LLMRouter {
             chatTopicId = Integer.parseInt(requestBody.get("ct_id").toString());
         }
 
-        Map<String, Object> data = Map.of(
-                "model", "deepseek/deepseek-chat-v3-0324:free",
-                "messages", List.of(
-                        Map.of(
-                                "role", "user",
-                                "content", requestBody.getOrDefault("message", "Hello"))));
-
-        ChatResponse response = webClient.post()
-                .uri(URL)
-                .header("Authorization", "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(data)
-                .retrieve()
-                .bodyToMono(ChatResponse.class)
-                .block();
+        String userMessage = requestBody.getOrDefault("message", "Hello").toString();
 
         Map<String, String> result = new HashMap<>();
-        if (response == null || response.getChoices() == null || response.getChoices().isEmpty()) {
-            result.put("message", "");
-        }
-        
-        else {
-            String msg = response.getChoices().get(0).getMessage().getContent();
-            // System.out.println("Response from LLM API: " + response.getChoices().get(0).getMessage().getContent());
-            result.put("message", msg);
+        try {
+            Map<String, Object> data = Map.of(
+                    "model", "deepseek/deepseek-chat-v3-0324:free",
+                    "messages", List.of(
+                            Map.of(
+                                    "role", "user",
+                                    "content", userMessage)));
 
-            if(chatTopicId != Integer.MIN_VALUE) {
-                result.put("ct_id", Integer.toString(chatTopicId));
+            System.out.println("LLMRouter: Model request payload: " + data);
+
+            ChatResponse response = webClient.post()
+                    .uri(URL)
+                    .header("Authorization", "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(data)
+                    .retrieve()
+                    .bodyToMono(ChatResponse.class)
+                    .block();
+
+            System.out.println("LLMRouter: Model response: " + response);
+
+            if (response == null || response.getChoices() == null || response.getChoices().isEmpty()) {
+                result.put("message", "");
             }
+            else {
+                String msg = response.getChoices().get(0).getMessage().getContent();
+                result.put("message", msg);
 
-            if(chatTopicId != Integer.MIN_VALUE && !msg.isEmpty()) {
-                logChatHistory(username, chatTopicId, requestBody.getOrDefault("message", "").toString(), msg);
+                if(chatTopicId != Integer.MIN_VALUE) {
+                    result.put("ct_id", Integer.toString(chatTopicId));
+                }
+
+                if(chatTopicId != Integer.MIN_VALUE && !msg.isEmpty()) {
+                    logChatHistory(username, chatTopicId, userMessage, msg);
+                }
+
+                // Insert combined user message and response into VectorDB with "chat" as payload keyword
+                try {
+                    long timestamp = System.currentTimeMillis();
+                    String combinedText = "Request Msg: " + userMessage + "\nResponse Msg: " + msg;
+
+                    List<Double> combinedEmbedding = embeddingAPI.getTextEmbedding(combinedText);
+
+                    Map<String, String> combinedPayload = new HashMap<>();
+                    combinedPayload.put("chat", "TRUE");
+                    combinedPayload.put("text", combinedText);
+
+                    vectorDB.upsertWithKeywords(timestamp, combinedEmbedding, username, combinedPayload);
+                }
+                catch (Exception ex) {
+                    System.out.println("Error inserting chat texts into VectorDB: " + ex.getMessage());
+                    ex.printStackTrace();
+                }
             }
+        } catch (Exception e) {
+            System.out.println("Server error in /chat endpoint:");
+            e.printStackTrace();
+            System.out.println("Request body: " + requestBody);
+            System.out.println("LLMRouter: Model used: deepseek/deepseek-chat-v3-0324:free");
+            result.put("error", "Server error: " + e.getMessage());
+            return ResponseEntity.status(500).body(result);
         }
 
-        // System.out.println(result);
         return ResponseEntity.ok(result);
     }
 
@@ -175,7 +204,6 @@ public class LLMRouter {
     // New: context-aware chat endpoint
     @PostMapping("/context-aware-chat")
     public ResponseEntity<Map<String, String>> contextAwareChat(@RequestBody Map<String, Object> requestBody) {
-        
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
@@ -190,20 +218,27 @@ public class LLMRouter {
             chatTopicId = Integer.parseInt(requestBody.get("ct_id").toString());
         }
 
+        Map<String, String> result = new HashMap<>();
         try {
-            // 1) Generate embedding for the user's message
             List<Double> embedding = embeddingAPI.getTextEmbedding(userMessage);
 
-            // 2) Search vector DB for top-3 similar texts for this user
-            List<String> contexts = vectorDB.getSimilarTextsForUser(embedding, username, 2);
+            // Always search for both "chat" and "pdfdata" similarity
+            List<String> chatContexts = vectorDB.getSimilar(embedding, username, "chat", 2);
+            List<String> pdfContexts = vectorDB.getSimilar(embedding, username, "pdfdata", 2);
 
-            // 3) Build context string (if any) to include in the prompt
             StringBuilder contextBuilder = new StringBuilder();
-            if (contexts != null && !contexts.isEmpty()) {
-                contextBuilder.append("Contextual excerpts from your documents:\n");
-                int idx = 1;
-                for (String ctx : contexts) {
-                    contextBuilder.append("Excerpt ").append(idx++).append(": ").append(ctx).append("\n\n");
+            int idx = 1;
+            if (chatContexts != null && !chatContexts.isEmpty()) {
+                contextBuilder.append("Contextual excerpts from your chat history:\n");
+                for (String ctx : chatContexts) {
+                    contextBuilder.append("Chat Excerpt ").append(idx++).append(": ").append(ctx).append("\n\n");
+                }
+            }
+            idx = 1;
+            if (pdfContexts != null && !pdfContexts.isEmpty()) {
+                contextBuilder.append("Contextual excerpts from your PDF documents:\n");
+                for (String ctx : pdfContexts) {
+                    contextBuilder.append("PDF Excerpt ").append(idx++).append(": ").append(ctx).append("\n\n");
                 }
             }
 
@@ -211,7 +246,6 @@ public class LLMRouter {
                     ? contextBuilder.toString()
                     : "No additional context available.";
 
-            // 4) Build messages with context as a system message followed by user message
             Map<String, Object> data = Map.of(
                     "model", "deepseek/deepseek-chat-v3-0324:free",
                     "messages", List.of(
@@ -229,10 +263,10 @@ public class LLMRouter {
                     .bodyToMono(ChatResponse.class)
                     .block();
 
-            Map<String, String> result = new HashMap<>();
             if (response == null || response.getChoices() == null || response.getChoices().isEmpty()) {
                 result.put("message", "");
-            } else {
+            }
+            else {
                 String msg = response.getChoices().get(0).getMessage().getContent();
                 result.put("message", msg);
 
@@ -243,14 +277,33 @@ public class LLMRouter {
                 if (chatTopicId != Integer.MIN_VALUE && !msg.isEmpty()) {
                     logChatHistory(username, chatTopicId, userMessage, msg);
                 }
-            }
 
-            return ResponseEntity.ok(result);
-        }
-        
-        catch (Exception e) {
+                // Insert combined user message and response into VectorDB with "chat" keyword
+                try {
+                    long timestamp = System.currentTimeMillis();
+                    String combinedText = "Request Msg: " + userMessage + "\nResponse Msg: " + msg;
+
+                    List<Double> combinedEmbedding = embeddingAPI.getTextEmbedding(combinedText);
+
+                    Map<String, String> combinedPayload = new HashMap<>();
+                    combinedPayload.put("chat", "TRUE");
+                    combinedPayload.put("text", combinedText);
+
+                    vectorDB.upsertWithKeywords(timestamp, combinedEmbedding, username, combinedPayload);
+                }
+                catch (Exception ex) {
+                    System.out.println("Error inserting chat texts into VectorDB: " + ex.getMessage());
+                    ex.printStackTrace();
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Server error in /context-aware-chat endpoint:");
             e.printStackTrace();
-            return ResponseEntity.status(500).body(Map.of("message", "Error: " + e.getMessage()));
+            System.out.println("Request body: " + requestBody);
+            result.put("error", "Server error: " + e.getMessage());
+            return ResponseEntity.status(500).body(result);
         }
+
+        return ResponseEntity.ok(result);
     }
 }

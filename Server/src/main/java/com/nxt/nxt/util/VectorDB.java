@@ -18,6 +18,7 @@ import io.qdrant.client.grpc.Points.SearchParams;
 import jakarta.annotation.PostConstruct;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +42,7 @@ public class VectorDB {
     @Value("${qdrant.api.tls}")
     private boolean useTls;
 
-    private String collectionName = "nexara_pdf_data";
+    private String collectionName = "nexara";
 
     @PostConstruct
     public void initClient() {
@@ -67,12 +68,20 @@ public class VectorDB {
         }
     }
 
-    public void upsertData(Long pointId, List<Double> vector, String text, String username) {
+    /**
+     * Upsert data with username and one keyword (text, post, chat, pdfdata).
+     * Always insert the data in "text", and set the keyword for that TRUE.
+     */
+    public void upsertData(Long pointId, List<Double> vector, String keyword, String keywordValue, String username) {
         try {
-
             List<Float> floatVector = vector.stream()
                     .map(Double::floatValue)
                     .toList();
+
+            Map<String, io.qdrant.client.grpc.JsonWithInt.Value> payload = new HashMap<>();
+            payload.put("username", io.qdrant.client.ValueFactory.value(username));
+            payload.put("text", io.qdrant.client.ValueFactory.value(keywordValue));
+            payload.put(keyword, io.qdrant.client.ValueFactory.value("TRUE"));
 
             var response = client.upsertAsync(
                     collectionName,
@@ -83,9 +92,7 @@ public class VectorDB {
                                             namedVectors(
                                                     Map.of("text",
                                                             vector(floatVector))))
-                                    .putAllPayload(Map.of(
-                                            "text", io.qdrant.client.ValueFactory.value(text),
-                                            "username", io.qdrant.client.ValueFactory.value(username)))
+                                    .putAllPayload(payload)
                                     .build()))
                     .get();
 
@@ -95,71 +102,93 @@ public class VectorDB {
         }
     }
 
-    public List<String> getSimilarTexts(List<Double> queryVector, int k) {
+    /**
+     * General upsert function: insert with username and any combination of other keywords.
+     * Always insert the data in "text", and set each keyword to TRUE.
+     */
+    public void upsertWithKeywords(Long pointId, List<Double> vector, String username, Map<String, String> keywordPayload) {
+        try {
+            List<Float> floatVector = vector.stream()
+                    .map(Double::floatValue)
+                    .toList();
+
+            Map<String, io.qdrant.client.grpc.JsonWithInt.Value> payload = new HashMap<>();
+            payload.put("username", io.qdrant.client.ValueFactory.value(username));
+            // Always insert content in "text"
+            if (keywordPayload.containsKey("text")) {
+                String textValue = keywordPayload.get("text");
+                System.out.println("VectorDB upsertWithKeywords: text=" + textValue);
+                payload.put("text", io.qdrant.client.ValueFactory.value(textValue));
+            }
+            // Set keywords to TRUE or blank only
+            for (String key : keywordPayload.keySet()) {
+                if (!key.equals("text")) {
+                    String value = keywordPayload.get(key);
+                    payload.put(key, io.qdrant.client.ValueFactory.value(
+                        "TRUE".equalsIgnoreCase(value) ? "TRUE" : ""
+                    ));
+                }
+            }
+
+            var response = client.upsertAsync(
+                    collectionName,
+                    List.of(
+                            PointStruct.newBuilder()
+                                    .setId(id(pointId))
+                                    .setVectors(
+                                            namedVectors(
+                                                    Map.of("text",
+                                                            vector(floatVector))))
+                                    .putAllPayload(payload)
+                                    .build()))
+                    .get();
+
+            System.out.println("General upsert response: " + response);
+        } catch (Exception e) {
+            System.out.println("Error during general upsert: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Search for similar items by keyword and username.
+     * Only search for similarity in "text" where keyword is TRUE.
+     */
+    public List<String> getSimilar(List<Double> queryVector, String username, String keyword, int k) {
         try {
             List<Float> floatVector = queryVector.stream()
                     .map(Double::floatValue)
                     .toList();
 
+            // Only filter by username and keyword (never "text")
+            if ("text".equals(keyword)) {
+                throw new IllegalArgumentException("Do not use 'text' as a filter keyword. Use a domain keyword like 'chat' or 'pdfdata'.");
+            }
+
             SearchPoints searchRequest = SearchPoints.newBuilder()
                     .setCollectionName(collectionName)
                     .setVectorName("text")
                     .addAllVector(floatVector)
-                    .setLimit(k)
-                    .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true).build())
-                    .build();
-
-            var searchResponse = client.searchAsync(searchRequest).get();
-
-            List<String> similarTexts = new ArrayList<>();
-            for (ScoredPoint point : searchResponse) {
-                if (point.getPayloadMap().containsKey("text")) {
-                    String text = point.getPayloadMap().get("text").getStringValue();
-                    similarTexts.add(text);
-                }
-            }
-
-            return similarTexts;
-        } catch (Exception e) {
-            System.out.println("Error during search: " + e.getMessage());
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-    public List<String> getSimilarTextsForUser(List<Double> queryVector, String username, int k) {
-        try {
-            // convert List<Double> -> List<Float>
-            List<Float> floatList = queryVector.stream()
-                    .map(Double::floatValue)
-                    .toList();
-
-            // Use SearchPoints (like getSimilarTexts) and apply a filter for username.
-            SearchPoints searchRequest = SearchPoints.newBuilder()
-                    .setCollectionName(collectionName)
-                    .setVectorName("text")
-                    .addAllVector(floatList)
                     .setFilter(Filter.newBuilder()
                             .addMust(matchKeyword("username", username))
+                            .addMust(matchKeyword(keyword, "TRUE"))
                             .build())
-                    .setParams(SearchParams.newBuilder().setExact(false).setHnswEf(128).build())
                     .setLimit(k)
                     .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true).build())
                     .build();
 
             var searchResponse = client.searchAsync(searchRequest).get();
 
-            List<String> similarTexts = new ArrayList<>();
+            List<String> results = new ArrayList<>();
             for (ScoredPoint point : searchResponse) {
                 if (point.getPayloadMap().containsKey("text")) {
-                    String text = point.getPayloadMap().get("text").getStringValue();
-                    similarTexts.add(text);
+                    String value = point.getPayloadMap().get("text").getStringValue();
+                    results.add(value);
                 }
             }
 
-            return similarTexts;
+            return results;
         } catch (Exception e) {
-            System.out.println("Error during user-filtered search: " + e.getMessage());
+            System.out.println("Error during keyword+user search: " + e.getMessage());
             e.printStackTrace();
             return new ArrayList<>();
         }
