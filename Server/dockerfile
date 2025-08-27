@@ -1,0 +1,25 @@
+# Use JDK 17 for build
+FROM eclipse-temurin:17-jdk-alpine AS build
+
+WORKDIR /app
+
+# Copy only necessary files for Maven build
+COPY .mvn .mvn
+COPY mvnw pom.xml ./
+COPY src src
+
+# Build the app
+RUN ./mvnw clean package -DskipTests
+
+# Use a smaller JRE image for running
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+# Copy the built jar from the build stage
+COPY --from=build /app/target/*.jar app.jar
+
+EXPOSE 4000
+
+# Start the app
+CMD ["java", "-jar", "app.jar"]
