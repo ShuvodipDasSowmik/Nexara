@@ -2,7 +2,7 @@
 import axios from "axios";
 
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://192.168.1.5:4000";
+const BASE_URL = "http://localhost:4000";
 
 
 const 
@@ -19,16 +19,22 @@ API.interceptors.response.use(
     async err => {
         const originalRequest = err.config;
 
-        if (err.response && err.response.status === 401 && !originalRequest._retry) {
+        // Only try refresh ONCE per request
+        if (
+            err.response &&
+            err.response.status === 401 &&
+            !originalRequest._retry &&
+            !originalRequest.url.endsWith("/auth/refresh")
+        ) {
             originalRequest._retry = true;
-
-            // Call refresh endpoint, which will use the refreshToken cookie automatically
-            await API.post("/auth/refresh"); // No need to extract token from response
-
-            // Retry the original request, browser will send new accessToken cookie automatically
-            return API(originalRequest);
+            try {
+                await API.post("/auth/refresh");
+                return API(originalRequest);
+            } catch (refreshErr) {
+                // If refresh fails, do NOT retry again
+                return Promise.reject(refreshErr);
+            }
         }
-        
         return Promise.reject(err);
     }
 );
