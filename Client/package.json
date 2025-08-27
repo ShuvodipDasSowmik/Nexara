@@ -7,15 +7,15 @@
     "dev": "npm-run-all --parallel dev:app dev:css",
     "dev:app": "vite",
     "dev:css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "build-css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch"
+    "build-css": "tailwindcss -i ./src/index.css -o ./src/output.css --minify",
+    "build": "npm run build-css && vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
     "autoprefixer": "^10.4.21",
     "axios": "^1.11.0",
+    "firebase": "^12.1.0",
     "katex": "^0.16.22",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

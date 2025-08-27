@@ -35,4 +35,3 @@ build/
 
 ### Test Files ###
 test-*.json
-src/main/resources/application.properties
