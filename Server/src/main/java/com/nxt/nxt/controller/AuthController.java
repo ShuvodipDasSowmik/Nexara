@@ -42,6 +42,23 @@ public class AuthController {
         return ResponseEntity.ok("Signed up");
     }
 
+    // Helper to set cookie flags based on environment
+    private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        String env = System.getenv("NEXARA_ENV"); // Set this env var to "prod" in cloud, leave unset in dev
+        if ("prod".equals(env)) {
+            cookie.setSecure(true);
+            cookie.setDomain("nexara-mhfy.onrender.com"); // your cloud backend domain
+        } else {
+            cookie.setSecure(false);
+            // no domain for localhost
+        }
+        cookie.setPath("/");
+        cookie.setMaxAge(maxAge);
+        response.addCookie(cookie);
+    }
+
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
         // System.out.println("Received signin request with credentials: " +
@@ -57,29 +74,13 @@ public class AuthController {
         }
 
         if (userOpt.isPresent() && encoder.matches(credentials.get("password"), userOpt.get().getPassword())) {
-
             String accessToken = jwtUtil.generateAccessToken(userOpt.get().getUsername());
             String refreshToken = jwtUtil.generateRefreshToken(userOpt.get().getUsername());
 
-            Cookie refreshCookie = new Cookie("refreshToken", refreshToken);
-            refreshCookie.setHttpOnly(true);
-            refreshCookie.setSecure(false);
-            refreshCookie.setPath("/");
-            refreshCookie.setMaxAge(60 * 60 * 24 * 7);
+            setCookie(response, "refreshToken", refreshToken, 60 * 60 * 24 * 7);
+            setCookie(response, "accessToken", accessToken, 60 * 60);
 
-            response.addCookie(refreshCookie);
-
-            Cookie accessCookie = new Cookie("accessToken", accessToken);
-            accessCookie.setHttpOnly(true);
-            accessCookie.setSecure(false);
-            accessCookie.setPath("/");
-            accessCookie.setMaxAge(60 * 60);
-
-            response.addCookie(accessCookie);
-
-            Map<String, Object> result = Map.of(
-                    "user", userOpt.get());
-
+            Map<String, Object> result = Map.of("user", userOpt.get());
             return ResponseEntity.ok(result);
         }
 
@@ -105,6 +106,9 @@ public class AuthController {
         accessCookie.setMaxAge(0);
         response.addCookie(accessCookie);
 
+        setCookie(response, "refreshToken", null, 0);
+        setCookie(response, "accessToken", null, 0);
+
         return ResponseEntity.ok("Signed out");
     }
 
@@ -127,12 +131,7 @@ public class AuthController {
             String username = jwtUtil.extractUsername(refreshToken);
             String newAccessToken = jwtUtil.generateAccessToken(username);
 
-            Cookie accessCookie = new Cookie("accessToken", newAccessToken);
-            accessCookie.setHttpOnly(true);
-            accessCookie.setSecure(false);
-            accessCookie.setPath("/");
-            accessCookie.setMaxAge(60 * 15);
-            response.addCookie(accessCookie);
+            setCookie(response, "accessToken", newAccessToken, 60 * 15);
 
             return ResponseEntity.ok(Map.of("status", "refreshed"));
         }
