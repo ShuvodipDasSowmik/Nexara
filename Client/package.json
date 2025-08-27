@@ -7,10 +7,9 @@
     "dev": "npm-run-all --parallel dev:app dev:css",
     "dev:app": "vite",
     "dev:css": "tailwindcss -i ./src/index.css -o ./src/output.css --watch",
+    "build-css": "tailwindcss -i ./src/index.css -o ./src/output.css --minify",
     "build": "npm run build-css && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "build-css": "tailwindcss -i ./src/index.css -o ./src/output.css --minify"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/cli": "^4.1.11",
