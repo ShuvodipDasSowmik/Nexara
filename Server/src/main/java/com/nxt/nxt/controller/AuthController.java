@@ -44,19 +44,19 @@ public class AuthController {
 
     // Helper to set cookie flags based on environment
     private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        // Create cookie object (needed for basic properties)
         Cookie cookie = new Cookie(name, value);
         cookie.setHttpOnly(true);
-        String env = System.getenv("NEXARA_ENV"); // Set this env var to "prod" in cloud, leave unset in dev
-        if ("prod".equals(env)) {
-            cookie.setSecure(true);
-            cookie.setDomain("nexara-mhfy.onrender.com"); // your cloud backend domain
-        } else {
-            cookie.setSecure(false);
-            // no domain for localhost
-        }
+        cookie.setSecure(true); // required for HTTPS
         cookie.setPath("/");
         cookie.setMaxAge(maxAge);
-        response.addCookie(cookie);
+        cookie.setDomain("nexara-mhfy.onrender.com"); // your backend domain
+
+        // Send cookie with SameSite=None manually (Servlet API does not support
+        // SameSite natively)
+        response.addHeader("Set-Cookie",
+                String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
+                        name, value, maxAge, "nexara-mhfy.onrender.com"));
     }
 
     @PostMapping("/signin")
@@ -91,7 +91,7 @@ public class AuthController {
     public ResponseEntity<String> signout(HttpServletResponse response) {
 
         System.out.println("Signing out user, clearing cookies");
-        
+
         Cookie cookie = new Cookie("refreshToken", null);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
@@ -114,7 +114,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
-        
+
         Cookie[] cookies = request.getCookies();
         String refreshToken = null;
 
@@ -139,7 +139,6 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token");
     }
 
-
     @GetMapping("/me")
     public ResponseEntity<Student> getCurrentUser(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
@@ -159,9 +158,10 @@ public class AuthController {
         }
 
         try {
-            // parse username once and validate token; parsing can throw if token invalid/expired
+            // parse username once and validate token; parsing can throw if token
+            // invalid/expired
             String username = jwtUtil.extractUsername(accessToken);
-            
+
             if (!jwtUtil.isValidToken(accessToken, username)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
@@ -170,7 +170,7 @@ public class AuthController {
             return userOpt.map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
         }
-        
+
         catch (Exception e) {
             // token parsing/validation failed
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
