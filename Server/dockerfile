@@ -14,8 +14,7 @@ RUN chmod +x mvnw
 # Build the app
 RUN ./mvnw clean package -DskipTests
 
-# Use a smaller JRE image for running
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jdk-alpine
 
 WORKDIR /app
 
