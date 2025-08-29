@@ -1,5 +1,5 @@
-# Use JDK 17 for build
-FROM eclipse-temurin:17-jdk-alpine AS build
+# Use JDK 21 for build
+FROM eclipse-temurin:21-jdk-alpine AS build
 
 WORKDIR /app
 
@@ -14,7 +14,8 @@ RUN chmod +x mvnw
 # Build the app
 RUN ./mvnw clean package -DskipTests
 
-FROM eclipse-temurin:21-jdk-alpine
+# Use a smaller JRE image for running
+FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 

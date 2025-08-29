@@ -19,10 +19,14 @@ export function AuthProvider({ children }) {
         setLoading(true);
         API.get("/auth/me")
             .then(res => {
-                // Backend returns the Student object directly (not wrapped in { user: ... })
                 setUser(res.data || null);
             })
-            .catch(() => setUser(null))
+            .catch((err) => {
+                // If unauthorized, clear user
+                if (err.response && err.response.status === 401) {
+                    setUser(null);
+                }
+            })
             .finally(() => setLoading(false));
     }, []);
 

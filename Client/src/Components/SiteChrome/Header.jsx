@@ -83,7 +83,6 @@ export default function Header() {
 					<nav className="hidden sm:flex gap-3 text-gray-300">
 						<Link to="/chat" className="hover:text-white">Chat</Link>
 						<Link to="/tools" className="hover:text-white">Tools</Link>
-						<Link to="/groupcall" className="hover:text-white">Call</Link>
 						<Link to="/community/posts" className="hover:text-white">Community</Link>
 					</nav>
 

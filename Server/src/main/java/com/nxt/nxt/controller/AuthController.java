@@ -42,6 +42,21 @@ public class AuthController {
         return ResponseEntity.ok("Signed up");
     }
 
+    private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
+        String env = System.getProperty("NEXARA_ENV", "dev");
+        String cookieStr;
+
+        if ("prod".equalsIgnoreCase(env)) {
+            cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
+                    name, value, maxAge, "nexara-mhfy.onrender.com");
+        }
+        else {
+            cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly", name, value, maxAge);
+        }
+
+        response.addHeader("Set-Cookie", cookieStr);
+    }
+
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
         // System.out.println("Received signin request with credentials: " +
@@ -57,29 +72,13 @@ public class AuthController {
         }
 
         if (userOpt.isPresent() && encoder.matches(credentials.get("password"), userOpt.get().getPassword())) {
-
             String accessToken = jwtUtil.generateAccessToken(userOpt.get().getUsername());
             String refreshToken = jwtUtil.generateRefreshToken(userOpt.get().getUsername());
 
-            Cookie refreshCookie = new Cookie("refreshToken", refreshToken);
-            refreshCookie.setHttpOnly(true);
-            refreshCookie.setSecure(false);
-            refreshCookie.setPath("/");
-            refreshCookie.setMaxAge(60 * 60 * 24 * 7);
+            setCookie(response, "refreshToken", refreshToken, 60 * 60 * 24 * 7);
+            setCookie(response, "accessToken", accessToken, 60 * 60);
 
-            response.addCookie(refreshCookie);
-
-            Cookie accessCookie = new Cookie("accessToken", accessToken);
-            accessCookie.setHttpOnly(true);
-            accessCookie.setSecure(false);
-            accessCookie.setPath("/");
-            accessCookie.setMaxAge(60 * 60);
-
-            response.addCookie(accessCookie);
-
-            Map<String, Object> result = Map.of(
-                    "user", userOpt.get());
-
+            Map<String, Object> result = Map.of("user", userOpt.get());
             return ResponseEntity.ok(result);
         }
 
@@ -90,7 +89,7 @@ public class AuthController {
     public ResponseEntity<String> signout(HttpServletResponse response) {
 
         System.out.println("Signing out user, clearing cookies");
-        
+
         Cookie cookie = new Cookie("refreshToken", null);
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
@@ -105,12 +104,15 @@ public class AuthController {
         accessCookie.setMaxAge(0);
         response.addCookie(accessCookie);
 
+        setCookie(response, "refreshToken", null, 0);
+        setCookie(response, "accessToken", null, 0);
+
         return ResponseEntity.ok("Signed out");
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(HttpServletRequest request, HttpServletResponse response) {
-        
+
         Cookie[] cookies = request.getCookies();
         String refreshToken = null;
 
@@ -127,19 +129,13 @@ public class AuthController {
             String username = jwtUtil.extractUsername(refreshToken);
             String newAccessToken = jwtUtil.generateAccessToken(username);
 
-            Cookie accessCookie = new Cookie("accessToken", newAccessToken);
-            accessCookie.setHttpOnly(true);
-            accessCookie.setSecure(true);
-            accessCookie.setPath("/");
-            accessCookie.setMaxAge(60 * 15);
-            response.addCookie(accessCookie);
+            setCookie(response, "accessToken", newAccessToken, 60 * 15);
 
             return ResponseEntity.ok(Map.of("status", "refreshed"));
         }
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid refresh token");
     }
-
 
     @GetMapping("/me")
     public ResponseEntity<Student> getCurrentUser(HttpServletRequest request) {
@@ -160,9 +156,10 @@ public class AuthController {
         }
 
         try {
-            // parse username once and validate token; parsing can throw if token invalid/expired
+            // parse username once and validate token; parsing can throw if token
+            // invalid/expired
             String username = jwtUtil.extractUsername(accessToken);
-            
+
             if (!jwtUtil.isValidToken(accessToken, username)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
@@ -171,7 +168,7 @@ public class AuthController {
             return userOpt.map(ResponseEntity::ok)
                     .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
         }
-        
+
         catch (Exception e) {
             // token parsing/validation failed
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

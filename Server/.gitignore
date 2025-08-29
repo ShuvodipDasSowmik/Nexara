@@ -35,3 +35,4 @@ build/
 
 ### Test Files ###
 test-*.json
+.env

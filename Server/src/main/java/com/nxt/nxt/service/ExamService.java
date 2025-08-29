@@ -1,4 +1,3 @@
-
 package com.nxt.nxt.service;
 
 import java.time.LocalDateTime;
@@ -23,22 +22,23 @@ import com.nxt.nxt.repositories.ExamRepository;
 import com.nxt.nxt.repositories.QuestionRepository;
 import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.repositories.StudentBestScoreRepository;
+import com.nxt.nxt.service.OpenAIService;
 
 @Service
 public class ExamService {
-    private final OpenRouterService openRouterService;
+    private final OpenAIService openAIService;
     private final ExamRepository examRepository;
     private final QuestionRepository questionRepository;
     private final StudentRepository studentRepository;
     private final StudentBestScoreRepository studentBestScoreRepository;
     private final ObjectMapper objectMapper;
 
-    public ExamService(OpenRouterService openRouterService, 
+    public ExamService(OpenAIService openAIService, 
                       ExamRepository examRepository, 
                       QuestionRepository questionRepository,
                       StudentRepository studentRepository,
                       StudentBestScoreRepository studentBestScoreRepository) {
-        this.openRouterService = openRouterService;
+        this.openAIService = openAIService;
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.studentRepository = studentRepository;
@@ -49,13 +49,13 @@ public class ExamService {
     public Integer generateExam(ExamGenerationRequest request) {
         // Build prompt for question generation
         String prompt = createPrompt(request.getInputText());
-        String model = "deepseek/deepseek-chat-v3-0324:free";
+        // Model is now handled inside OpenAIService
 
         // 2. Call AI service
-        ChatResponse aiResponse = openRouterService.callOpenRouter(prompt, model);
-        
+        String aiResponseContent = openAIService.getChatCompletion(prompt);
+
         // 3. Parse AI response into questions
-        List<Question> questions = parseQuestions(aiResponse);
+        List<Question> questions = parseQuestionsFromString(aiResponseContent);
         
         // 4. Save exam to database
         Exam exam = new Exam();
@@ -86,7 +86,8 @@ public class ExamService {
             try {
                 questionRepository.save(question);
                 System.out.println("Successfully saved question " + (i+1));
-            } catch (Exception e) {
+            }
+            catch (Exception e) {
                 System.out.println("Error saving question " + (i+1) + ": " + e.getMessage());
                 e.printStackTrace();
             }
@@ -232,44 +233,28 @@ public class ExamService {
             """, inputText);
     }
 
-    private List<Question> parseQuestions(ChatResponse aiResponse) {
+    private List<Question> parseQuestionsFromString(String aiResponseContent) {
         List<Question> questions = new ArrayList<>();
-        
         try {
-            // Extract the content from the ChatResponse
-            String content = extractContentFromResponse(aiResponse);
-            
-            // Clean the content to extract just the JSON array
-            String jsonContent = cleanJsonContent(content);
-            
-            // Parse JSON array
+            String jsonContent = cleanJsonContent(aiResponseContent);
             JsonNode questionsArray = objectMapper.readTree(jsonContent);
-            
             if (questionsArray.isArray()) {
                 for (JsonNode questionNode : questionsArray) {
                     Question question = new Question();
                     question.setQuestionText(questionNode.get("questionText").asText());
-                    
-                    // Read options (original order)
                     JsonNode optionsNode = questionNode.get("options");
                     List<String> optionsList = new ArrayList<>();
                     for (JsonNode option : optionsNode) {
                         optionsList.add(option.asText());
                     }
-
                     String fullAnswer = questionNode.get("correctAnswer").asText();
-                    // 1) Finding correct index in original list using text or explicit letter like 'Option A'
                     int correctIndexOriginal = resolveCorrectIndex(fullAnswer, optionsList);
                     if (correctIndexOriginal < 0 || correctIndexOriginal >= optionsList.size()) {
-                        correctIndexOriginal = 0; // fallback
+                        correctIndexOriginal = 0;
                     }
                     String correctOptionText = optionsList.get(correctIndexOriginal);
-
-                    // 2) Shuffle and set options
                     java.util.Collections.shuffle(optionsList);
                     question.setOptions(String.join(",", optionsList));
-
-                    // 3) Find new index of the correct option text after shuffle and set letter
                     int newIndex = 0;
                     for (int i = 0; i < optionsList.size(); i++) {
                         if (optionsList.get(i).equalsIgnoreCase(correctOptionText)) {
@@ -278,28 +263,14 @@ public class ExamService {
                         }
                     }
                     question.setCorrectAnswer(String.valueOf((char)('A' + newIndex)));
-                    
                     questions.add(question);
                 }
             }
         } catch (Exception e) {
             System.err.println("Error parsing AI response: " + e.getMessage());
-            // Return fallback questions if parsing fails
             questions = createFallbackQuestions();
         }
-        
         return questions;
-    }
-
-    private String extractContentFromResponse(ChatResponse response) {
-        try {
-            if (response.getChoices() != null && !response.getChoices().isEmpty()) {
-                return response.getChoices().get(0).getMessage().getContent();
-            }
-        } catch (Exception e) {
-            System.err.println("Error extracting content: " + e.getMessage());
-        }
-        return "";
     }
 
     private String cleanJsonContent(String content) {
@@ -420,3 +391,4 @@ public class ExamService {
         return examRepository.findById(examId).orElse(null);
     }
 }
+         

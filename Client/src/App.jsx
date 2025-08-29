@@ -14,7 +14,6 @@ import Home from './Pages/Home'
 import Header from './Components/SiteChrome/Header'
 import Footer from './Components/SiteChrome/Footer'
 import Posts from './Pages/Community/Posts'
-import GroupCall from './Pages/GroupCall/GroupCall'
 
 function App() {
   return (
@@ -29,7 +28,6 @@ function App() {
             <Route path="/chat/:ct_id" element={<Chat />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/community/posts" element={<Posts />} />
-            <Route path="/groupcall" element={<GroupCall />} />
             <Route
               path="/user/dashboard"
               element={
