@@ -2,7 +2,7 @@
 import axios from "axios";
 
 
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || "https://localhost:4000";
+const BASE_URL = "http://localhost:4000" || import.meta.env.VITE_BACKEND_URL;
 
 
 const 

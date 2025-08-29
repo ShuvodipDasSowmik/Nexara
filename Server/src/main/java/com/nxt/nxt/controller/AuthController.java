@@ -42,21 +42,19 @@ public class AuthController {
         return ResponseEntity.ok("Signed up");
     }
 
-    // Helper to set cookie flags based on environment
     private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
-        // Create cookie object (needed for basic properties)
-        Cookie cookie = new Cookie(name, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(true); // required for HTTPS
-        cookie.setPath("/");
-        cookie.setMaxAge(maxAge);
-        cookie.setDomain("nexara-mhfy.onrender.com"); // your backend domain
+        String env = System.getProperty("NEXARA_ENV", "dev");
+        String cookieStr;
 
-        // Send cookie with SameSite=None manually (Servlet API does not support
-        // SameSite natively)
-        response.addHeader("Set-Cookie",
-                String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
-                        name, value, maxAge, "nexara-mhfy.onrender.com"));
+        if ("prod".equalsIgnoreCase(env)) {
+            cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
+                    name, value, maxAge, "nexara-mhfy.onrender.com");
+        }
+        else {
+            cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly", name, value, maxAge);
+        }
+
+        response.addHeader("Set-Cookie", cookieStr);
     }
 
     @PostMapping("/signin")
