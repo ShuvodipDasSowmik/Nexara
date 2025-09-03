@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../Context/AuthContext';
+import { usePosts } from '../../Context/PostsContext';
 import API from '../../API/axios';
 import PostModal from '../../Components/Community/PostModal';
 import PostCard from '../../Components/Community/PostCard';
@@ -7,25 +8,27 @@ import CreatePostModal from '../../Components/Community/CreatePostModal';
 import NotificationToast from '../../Components/Community/NotificationToast';
 
 const Posts = () => {
-    const [posts, setPosts] = useState([]);
     const [newPost, setNewPost] = useState({ title: '', content: '' });
-    const [loading, setLoading] = useState(true);
     const [editingPost, setEditingPost] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
     const [notification, setNotification] = useState(null);
     const [selectedPost, setSelectedPost] = useState(null);
     const [showPostModal, setShowPostModal] = useState(false);
-    const [voteCounts, setVoteCounts] = useState({});
-    const [commentCounts, setCommentCounts] = useState({});
-    const [userVotes, setUserVotes] = useState({}); // postId -> 1 | -1 | 0
 
     const { user } = useAuth();
-
-    // Fetch posts when component mounts or when user changes (so we can fetch per-user votes)
-    useEffect(() => {
-        fetchPosts();
-    }, [user]);
+    const { 
+        posts, 
+        loading, 
+        error, 
+        voteCounts, 
+        commentCounts, 
+        userVotes,
+        addPost,
+        updatePost: updatePostFromContext,
+        deletePost: deletePostFromContext,
+        handleVote: handleVoteFromContext
+    } = usePosts();
 
     // Auto-hide notification after 5 seconds
     useEffect(() => {
@@ -41,129 +44,55 @@ const Posts = () => {
         setNotification({ message, type });
     };
 
-    const fetchPosts = async () => {
-        try {
-            console.log('Fetching posts...');
-            const response = await API.get('/posts');
-            console.log('Posts response:', response);
-            setPosts(response.data);
-            
-            // Fetch vote and comment counts for each post
-            const posts = response.data;
-            const voteCountPromises = posts.map(post => 
-                API.get(`/posts/${post.id}/votes`).catch(() => ({ data: 0 }))
-            );
-            const commentCountPromises = posts.map(post => 
-                API.get(`/posts/${post.id}/comments/count`).catch(() => ({ data: 0 }))
-            );
-            
-            const voteCountResponses = await Promise.all(voteCountPromises);
-            const commentCountResponses = await Promise.all(commentCountPromises);
-            
-            const newVoteCounts = {};
-            const newCommentCounts = {};
-            
-            posts.forEach((post, index) => {
-                newVoteCounts[post.id] = voteCountResponses[index].data;
-                newCommentCounts[post.id] = commentCountResponses[index].data;
-            });
-            
-            setVoteCounts(newVoteCounts);
-            setCommentCounts(newCommentCounts);
-
-            // fetch current user's vote for each post (if logged in)
-            const newUserVotes = {};
-            if (user) {
-                const userVotePromises = posts.map(post =>
-                    API.get(`/posts/${post.id}/vote?studentId=${user.id}`).catch(() => ({ data: 0 }))
-                );
-                const userVoteResponses = await Promise.all(userVotePromises);
-                posts.forEach((post, index) => {
-                    newUserVotes[post.id] = userVoteResponses[index].data || 0;
-                });
-            }
-            setUserVotes(newUserVotes);
-            setLoading(false);
-        } catch (error) {
-            console.error('Error fetching posts:', error);
-            showNotification('Failed to load posts. Please try again.', 'error');
-            setLoading(false);
-        }
-    };
-
     const createPost = async (e) => {
         e.preventDefault();
         if (!newPost.title.trim() || !newPost.content.trim() || !user) return;
 
         setIsPosting(true);
         try {
-            // Log the data being sent for debugging
             const postData = {
                 title: newPost.title.trim(),
                 content: newPost.content.trim(),
                 studentId: user.id
-                // Remove studentName since it's not part of the Post entity
             };
 
             console.log('Sending post data:', postData);
-            console.log('User object:', user);
 
-            const response = await API.post('/posts', postData);
+            const result = await addPost(postData);
 
-            console.log('Post creation response:', response);
-
-            if (response.status === 201) {
+            if (result.success) {
                 setNewPost({ title: '', content: '' });
                 setShowCreateModal(false);
                 showNotification('Post created successfully! 🎉');
-                // Refresh the posts feed
-                await fetchPosts();
+            } else {
+                showNotification(result.error, 'error');
             }
         } catch (error) {
             console.error('Error creating post:', error);
-            console.error('Error response:', error.response);
-            console.error('Error data:', error.response?.data);
-            console.error('Error status:', error.response?.status);
-
-            // Show more specific error message
-            const errorMessage = error.response?.data?.message ||
-                error.response?.data ||
-                `Failed to create post. Status: ${error.response?.status}` ||
-                'Failed to create post. Please try again.';
-            showNotification(errorMessage, 'error');
+            showNotification('Failed to create post. Please try again.', 'error');
         } finally {
             setIsPosting(false);
         }
     };
 
-    const updatePost = async (postId, updatedPost) => {
-        try {
-            const response = await API.put(`/posts/${postId}`, updatedPost);
-
-            if (response.status === 200) {
-                setEditingPost(null);
-                showNotification('Post updated successfully! ✏️');
-                await fetchPosts();
-            }
-        } catch (error) {
-            console.error('Error updating post:', error);
-            showNotification('Failed to update post. Please try again.', 'error');
+    const updatePost = async (postId, updatedPostData) => {
+        const result = await updatePostFromContext(postId, updatedPostData);
+        if (result.success) {
+            setEditingPost(null);
+            showNotification('Post updated successfully! ✏️');
+        } else {
+            showNotification(result.error, 'error');
         }
     };
 
     const deletePost = async (postId) => {
         if (!window.confirm('Are you sure you want to delete this post?')) return;
 
-        try {
-            const response = await API.delete(`/posts/${postId}`);
-
-            if (response.status === 204) {
-                showNotification('Post deleted successfully! 🗑️');
-                await fetchPosts();
-            }
-        } catch (error) {
-            console.error('Error deleting post:', error);
-            showNotification('Failed to delete post. Please try again.', 'error');
+        const result = await deletePostFromContext(postId);
+        if (result.success) {
+            showNotification('Post deleted successfully! 🗑️');
+        } else {
+            showNotification(result.error, 'error');
         }
     };
 
@@ -178,22 +107,9 @@ const Posts = () => {
     };
 
     const handleVote = async (postId, voteType) => {
-        if (!user) return;
-
-        try {
-            const endpoint = voteType === 1 ? 'upvote' : 'downvote';
-            await API.post(`/posts/${postId}/${endpoint}?studentId=${user.id}`);
-            
-            // Update vote count immediately
-            const response = await API.get(`/posts/${postId}/votes`);
-            setVoteCounts(prev => ({ ...prev, [postId]: response.data }));
-
-            // Refresh this user's vote for this post
-            const userVoteResp = await API.get(`/posts/${postId}/vote?studentId=${user.id}`);
-            setUserVotes(prev => ({ ...prev, [postId]: userVoteResp.data || 0 }));
-        } catch (error) {
-            console.error('Error voting:', error);
-            showNotification('Failed to register vote. Please try again.', 'error');
+        const result = await handleVoteFromContext(postId, voteType);
+        if (!result.success) {
+            showNotification(result.error, 'error');
         }
     };
 
@@ -318,7 +234,7 @@ const Posts = () => {
                 post={selectedPost}
                 isOpen={showPostModal}
                 onClose={closePostModal}
-                onPostUpdate={fetchPosts}
+                onPostUpdate={() => {}} // No need to refetch since context handles updates
                 showNotification={showNotification}
                 userVote={selectedPost ? userVotes[selectedPost.id] || 0 : 0}
             />
