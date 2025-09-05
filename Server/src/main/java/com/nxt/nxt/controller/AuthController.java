@@ -1,12 +1,18 @@
 package com.nxt.nxt.controller;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.nxt.nxt.entity.Student;
 import com.nxt.nxt.repositories.StudentRepository;
@@ -31,15 +37,51 @@ public class AuthController {
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<String> signup(@RequestBody Student student) {
-        // System.out.println("Received signup request for: " + student);
-        if (student.getId() == null) {
-            student.setId(UUID.randomUUID());
-        }
-        student.setPassword(encoder.encode(student.getPassword()));
+    public ResponseEntity<Map<String, Object>> signup(@RequestBody Student student) {
+        try {
+            System.out.println("Received signup request for: " + student.getUsername());
+            if (student.getId() == null) {
+                student.setId(UUID.randomUUID());
+            }
+            student.setPassword(encoder.encode(student.getPassword()));
 
-        repo.save(student);
-        return ResponseEntity.ok("Signed up");
+            repo.save(student);
+            System.out.println("Successfully saved student: " + student.getUsername());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User created successfully");
+            response.put("username", student.getUsername());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            System.err.println("Duplicate key error: " + e.getMessage());
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            
+            // Check if it's a username or email duplicate
+            if (e.getMessage().contains("students_username_key")) {
+                errorResponse.put("message", "Username already exists. Please choose a different username.");
+            } else if (e.getMessage().contains("students_email_key")) {
+                errorResponse.put("message", "Email already exists. Please use a different email address.");
+            } else {
+                errorResponse.put("message", "User with this information already exists.");
+            }
+            
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+            
+        } catch (Exception e) {
+            System.err.println("Error during signup: " + e.getMessage());
+            e.printStackTrace();
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error creating user. Please try again.");
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
 
     private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
