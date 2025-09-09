@@ -18,7 +18,7 @@ public class SecurityConfig {
         return http.csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/api/auth/**").permitAll()  // only auth endpoints are public
+                        .requestMatchers("/", "/api/auth/**", "/api/tools/summarize-youtube-transcript").permitAll()  // only auth endpoints are public
                         .anyRequest().authenticated()                 // secure all other endpoints including /api/exam/**
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

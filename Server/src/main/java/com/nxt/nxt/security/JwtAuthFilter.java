@@ -23,7 +23,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
     }
 
-    private static final String[] PUBLIC_URLS = {"/", "/api/auth/**"};
+    // Make only the summarize endpoint public instead of all /api/tools/**
+    private static final String[] PUBLIC_URLS = {
+        "/",
+        "/api/auth/**",
+        "/api/tools/summarize-youtube-transcript" // only this tools endpoint is public
+    };
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override
@@ -36,12 +41,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return false;
     }
 
-
-
     @Override
     protected void doFilterInternal(HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
+
+        // If this is a public path, skip auth checks immediately
+        for (String publicUrl : PUBLIC_URLS) {
+            if (pathMatcher.match(publicUrl, request.getServletPath())) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
 
         String token = null;
 

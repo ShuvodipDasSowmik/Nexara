@@ -1,6 +1,11 @@
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import axios from "axios";
 import Header from "../Components/SiteChrome/Header";
 import Footer from "../Components/SiteChrome/Footer";
+import MessageFormatter from "../Components/ChatComponents/MessageFormatter";
+
+const BASE_URL = "http://localhost:4000" || import.meta.env.VITE_BACKEND_URL;
 
 const features = [
     {
@@ -64,6 +69,33 @@ const features = [
 
 const Home = () => {
     const navigate = useNavigate();
+    const [youtubeUrl, setYoutubeUrl] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [summary, setSummary] = useState("");
+    const [error, setError] = useState("");
+
+    const handleSummarize = async () => {
+        setLoading(true);
+        setSummary("");
+        setError("");
+        try {
+            const res = await axios.post(
+                `${BASE_URL}/api/tools/summarize-youtube-transcript`,
+                `url=${encodeURIComponent(youtubeUrl)}`,
+                { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+            );
+            setSummary(res.data);
+        } catch (e) {
+            setError(
+                e?.response?.data
+                    ? typeof e.response.data === "string"
+                        ? e.response.data
+                        : "Failed to summarize transcript."
+                    : "Network error. Please try again."
+            );
+        }
+        setLoading(false);
+    };
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-br from-blue-900 via-purple-900 to-gray-900">
@@ -72,24 +104,61 @@ const Home = () => {
                     <div className="absolute top-0 left-0 w-72 h-72 bg-gradient-to-tr from-blue-600/30 via-purple-600/20 to-transparent rounded-full blur-2xl"></div>
                     <div className="absolute bottom-0 right-0 w-56 h-56 bg-gradient-to-tr from-purple-600/30 via-blue-600/20 to-transparent rounded-full blur-2xl"></div>
                 </div>
-                <section className="relative z-10 w-full max-w-3xl mx-auto">
-                    <div className="bg-gray-900/80 rounded-2xl shadow-xl border border-gray-700/60 p-8 mb-8 backdrop-blur-md">
-                        <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight text-center">
-                            Nexara
-                        </h1>
-                        <p className="text-lg md:text-xl text-gray-300 mb-6 text-center">
-                            Your Context Aware Study Buddy
-                        </p>
-                        <div className="flex justify-center mb-4">
-                            <button
-                                onClick={() => navigate("/signup")}
-                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:scale-105 transition"
-                            >
-                                Get Started
-                            </button>
+
+                {/* Hero Section with YouTube Summarizer - wider and two-column */}
+                <section className="relative z-10 w-full max-w-6xl mx-auto">
+                    <div className="bg-gradient-to-br from-blue-700 via-purple-700 to-gray-900 rounded-2xl shadow-2xl border border-blue-600/40 p-8 mb-8 backdrop-blur-md flex flex-col md:flex-row items-start gap-6">
+                        <div className="w-full md:w-1/2 flex flex-col items-start">
+                            <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight drop-shadow-lg">
+                                Nexara
+                            </h1>
+                            <p className="text-lg md:text-xl text-gray-200 mb-6 font-medium">
+                                Your Context Aware Study Buddy
+                            </p>
+                            <div className="flex w-full mb-4">
+                                <input
+                                    type="text"
+                                    className="flex-1 px-4 py-3 rounded-l-lg border border-purple-400 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Paste YouTube video URL to summarize transcript..."
+                                    value={youtubeUrl}
+                                    onChange={e => setYoutubeUrl(e.target.value)}
+                                    disabled={loading}
+                                />
+                                <button
+                                    onClick={handleSummarize}
+                                    className="px-5 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold rounded-r-lg shadow hover:scale-105 transition disabled:opacity-60"
+                                    disabled={!youtubeUrl || loading}
+                                >
+                                    {loading ? "Summarizing..." : "Summarize"}
+                                </button>
+                            </div>
+                            {error && (
+                                <div className="mt-2 text-red-400 font-semibold text-left">{error}</div>
+                            )}
+                            <div className="mt-4 flex gap-3">
+                                <button
+                                    onClick={() => navigate("/signup")}
+                                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg shadow hover:scale-105 transition"
+                                >
+                                    Get Started
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Response pane - right side */}
+                        <div className="w-full md:w-1/2 bg-gray-900/80 rounded-xl p-4 shadow text-gray-100 overflow-auto max-h-80">
+                            <h2 className="text-lg font-bold mb-2 text-blue-300">Video Summary</h2>
+                            {summary ? (
+                                <div className="prose prose-invert max-w-none">
+                                    <MessageFormatter text={summary} isUser={false} />
+                                </div>
+                            ) : (
+                                <div className="text-gray-400">Paste a YouTube URL and click Summarize to see the result here.</div>
+                            )}
                         </div>
                     </div>
                 </section>
+
                 <section className="relative z-10 w-full max-w-5xl mx-auto mt-2">
                     <h2 className="text-2xl font-bold text-white mb-6 text-center">Platform Features</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">

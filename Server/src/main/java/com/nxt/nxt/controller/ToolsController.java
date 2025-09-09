@@ -25,6 +25,7 @@ import com.nxt.nxt.util.EmbeddingAPI;
 import com.nxt.nxt.util.PDFUtilities;
 import com.nxt.nxt.util.StringFormatter;
 import com.nxt.nxt.util.VectorDB;
+import com.nxt.nxt.util.SummarizeTranscript;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.pdf.PdfWriter;
 import com.itextpdf.tool.xml.XMLWorkerHelper;
@@ -48,8 +49,12 @@ public class ToolsController {
     @Autowired
     VectorDB vectorDB;
 
-    public ToolsController(PDFDataRepository pdfDataRepository) {
+    private final SummarizeTranscript summarizeTranscript;
+
+    @Autowired
+    public ToolsController(PDFDataRepository pdfDataRepository, SummarizeTranscript summarizeTranscript) {
         this.pdfDataRepository = pdfDataRepository;
+        this.summarizeTranscript = summarizeTranscript;
     }
 
     @PostMapping("/pdf-parser")
@@ -156,6 +161,23 @@ public class ToolsController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(500).body("Error generating PDF: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/summarize-youtube-transcript")
+    public ResponseEntity<?> summarizeYoutubeTranscript(@RequestParam("url") String youtubeUrl) {
+        try {
+            String transcript = summarizeTranscript.getYoutubeTranscript(youtubeUrl);
+            if (transcript == null || transcript.isEmpty()) {
+                return ResponseEntity.badRequest().body("Could not fetch transcript for the provided URL.");
+            }
+
+            String summary = summarizeTranscript.summarizeTranscript(transcript);
+            return ResponseEntity.ok(summary);
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error summarizing transcript: " + e.getMessage());
         }
     }
 

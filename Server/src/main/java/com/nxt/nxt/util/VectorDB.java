@@ -183,6 +183,7 @@ public class VectorDB {
 
             List<String> results = new ArrayList<>();
 
+            // Iterate directly over searchResponse
             for (ScoredPoint point : searchResponse) {
                 if (point.getPayloadMap().containsKey("text")) {
                     String value = point.getPayloadMap().get("text").getStringValue();
@@ -228,6 +229,7 @@ public class VectorDB {
 
             List<String> results = new ArrayList<>();
 
+            // Iterate directly over searchResponse
             for (ScoredPoint point : searchResponse) {
                 if (point.getPayloadMap().containsKey("text")) {
                     String value = point.getPayloadMap().get("text").getStringValue();
