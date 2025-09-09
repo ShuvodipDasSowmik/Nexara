@@ -7,7 +7,6 @@ export default function LastFiveScoresChart() {
 
   useEffect(() => {
     API.get("/users/last-five-scores").then(res => {
-      console.log("Last five scores API response:", res.data);
       setData(res.data || []);
     }).catch(err => {
       console.error("Error fetching last five scores:", err);

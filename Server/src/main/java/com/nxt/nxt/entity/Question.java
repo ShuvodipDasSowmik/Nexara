@@ -9,6 +9,8 @@ public class Question {
     private String optionC;
     private String optionD;
     private String correctAnswer;
+    private String questionType; // "multiple_choice" or "subjective"
+    private String subjectiveAnswer; // For storing expected answer format/rubric for subjective questions
 
     // Getters & Setters
     public Integer getId() { return id; }
@@ -34,6 +36,12 @@ public class Question {
 
     public String getCorrectAnswer() { return correctAnswer; }
     public void setCorrectAnswer(String correctAnswer) { this.correctAnswer = correctAnswer; }
+
+    public String getQuestionType() { return questionType; }
+    public void setQuestionType(String questionType) { this.questionType = questionType; }
+
+    public String getSubjectiveAnswer() { return subjectiveAnswer; }
+    public void setSubjectiveAnswer(String subjectiveAnswer) { this.subjectiveAnswer = subjectiveAnswer; }
 
     // Helper method to set options from comma-separated string (for AI parsing)
     public void setOptions(String options) {

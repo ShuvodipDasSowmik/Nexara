@@ -32,7 +32,20 @@ const TakeExam = () => {
   }, [examId]);
 
   const total = questions.length;
-  const answeredCount = useMemo(() => Object.keys(answers).length, [answers]);
+  const answeredCount = useMemo(() => {
+    return Object.entries(answers).filter(([questionId, answer]) => {
+      const question = questions.find(q => q.id === parseInt(questionId));
+      if (!question) return false;
+      
+      if (question.questionType === 'subjective') {
+        // For subjective questions, check if answer is not empty
+        return answer && answer.trim().length > 0;
+      } else {
+        // For multiple choice, just check if an option is selected
+        return answer && answer.length > 0;
+      }
+    }).length;
+  }, [answers, questions]);
 
   const setAnswer = (qid, value) => setAnswers(a => ({ ...a, [qid]: value }));
 
@@ -76,58 +89,88 @@ const TakeExam = () => {
                     <div className="text-white font-semibold mb-2">
                       {idx + 1}. {q.questionText}
                     </div>
-                    <div className="space-y-2 text-gray-200">
-                      {(['A','B','C','D']).map(letter => {
-                        const key = `option${letter}`;
-                        const val = letter;
-                        const selected = answers[q.id] === val;
-                        const showGrading = !!result;
-                        const detail = result?.details?.find(d => d.questionId === q.id);
-                        const isThisCorrect = showGrading ? (detail?.correctAnswer?.toUpperCase?.() === val.toUpperCase()) : undefined;
-                        const isThisSelected = selected;
-                        const border = showGrading
-                          ? isThisCorrect
-                            ? 'border-green-500'
-                            : isThisSelected && !detail?.isCorrect
-                              ? 'border-red-500'
-                              : 'border-gray-700'
-                          : 'border-gray-700';
-                        return (
-                          <label key={key} className={`flex items-center gap-2 cursor-pointer border ${border} rounded-md p-2 bg-gray-800/60 hover:bg-gray-800/80`}>
-                            <input
-                              type="radio"
-                              name={`q-${q.id}`}
-                              checked={selected}
-                              onChange={() => setAnswer(q.id, val)}
-                              className="accent-blue-500"
-                              disabled={!!result}
-                            />
-                            <span>
-                              <span className="text-blue-300 mr-2">{letter}.</span>
-                              {q[key]}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {!!result && (
-                      <div className="mt-2 text-sm">
-                        {(() => {
-                          const d = result?.details?.find(detail => detail.questionId === q.id);
-                          if (!d) return null;
-                          const selectedLetter = answers[q.id];
-                          const correctLetter = String(d.correctAnswer || '').toUpperCase();
-                          const isSelectedCorrect = String(selectedLetter || '').toUpperCase() === correctLetter;
+                    
+                    {q.questionType === 'subjective' ? (
+                      // Subjective Question - Text Area
+                      <div className="space-y-2">
+                        <textarea
+                          className="w-full p-3 rounded bg-gray-900/70 text-gray-100 border border-gray-700 min-h-[120px] placeholder-gray-400"
+                          placeholder="Type your detailed answer here..."
+                          value={answers[q.id] || ''}
+                          onChange={(e) => setAnswer(q.id, e.target.value)}
+                          disabled={!!result}
+                        />
+                        {!!result && (
+                          <div className="mt-2 text-sm">
+                            {(() => {
+                              const d = result?.details?.find(detail => detail.questionId === q.id);
+                              if (!d) return null;
+                              const score = d.correctAnswer; // For subjective, this contains the score
+                              return (
+                                <div className={d.isCorrect ? 'text-green-400' : 'text-yellow-400'}>
+                                  <div className="font-semibold">Score: {score}</div>
+                                  {d.isCorrect ? 'Excellent answer!' : 'Good effort! Review the topic for improvement.'}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      // Multiple Choice Question - Radio Buttons
+                      <div className="space-y-2 text-gray-200">
+                        {(['A','B','C','D']).map(letter => {
+                          const key = `option${letter}`;
+                          const val = letter;
+                          const selected = answers[q.id] === val;
+                          const showGrading = !!result;
+                          const detail = result?.details?.find(d => d.questionId === q.id);
+                          const isThisCorrect = showGrading ? (detail?.correctAnswer?.toUpperCase?.() === val.toUpperCase()) : undefined;
+                          const isThisSelected = selected;
+                          const border = showGrading
+                            ? isThisCorrect
+                              ? 'border-green-500'
+                              : isThisSelected && !detail?.isCorrect
+                                ? 'border-red-500'
+                                : 'border-gray-700'
+                            : 'border-gray-700';
                           return (
-                            <div className={isSelectedCorrect ? 'text-green-400' : 'text-red-400'}>
-                              {isSelectedCorrect ? 'Correct' : (
-                                <>
-                                  Wrong. Correct answer is <span className="font-semibold text-green-400">{correctLetter}</span>.
-                                </>
-                              )}
-                            </div>
+                            <label key={key} className={`flex items-center gap-2 cursor-pointer border ${border} rounded-md p-2 bg-gray-800/60 hover:bg-gray-800/80`}>
+                              <input
+                                type="radio"
+                                name={`q-${q.id}`}
+                                checked={selected}
+                                onChange={() => setAnswer(q.id, val)}
+                                className="accent-blue-500"
+                                disabled={!!result}
+                              />
+                              <span>
+                                <span className="text-blue-300 mr-2">{letter}.</span>
+                                {q[key]}
+                              </span>
+                            </label>
                           );
-                        })()}
+                        })}
+                        {!!result && (
+                          <div className="mt-2 text-sm">
+                            {(() => {
+                              const d = result?.details?.find(detail => detail.questionId === q.id);
+                              if (!d) return null;
+                              const selectedLetter = answers[q.id];
+                              const correctLetter = String(d.correctAnswer || '').toUpperCase();
+                              const isSelectedCorrect = String(selectedLetter || '').toUpperCase() === correctLetter;
+                              return (
+                                <div className={isSelectedCorrect ? 'text-green-400' : 'text-red-400'}>
+                                  {isSelectedCorrect ? 'Correct' : (
+                                    <>
+                                      Wrong. Correct answer is <span className="font-semibold text-green-400">{correctLetter}</span>.
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -178,6 +221,13 @@ const TakeExam = () => {
                 onClick={() => setShowScoreModal(false)}
               >
                 Close
+              </button>
+              <button
+                type="button"
+                className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                onClick={() => navigate(`/exam/${examId}/summary`)}
+              >
+                View Summary
               </button>
             </div>
           </div>

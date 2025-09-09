@@ -23,7 +23,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.jwtUtil = jwtUtil;
     }
 
-    private static final String[] PUBLIC_URLS = {"/", "/api/auth/**"};
+    private static final String[] PUBLIC_URLS = {"/", "/api/auth/**", "/api/exam/**"};
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     @Override

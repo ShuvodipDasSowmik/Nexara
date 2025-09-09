@@ -29,7 +29,7 @@ public class QuestionRepository {
             KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbc.update(connection -> {
                 PreparedStatement ps = connection.prepareStatement(
-                    "INSERT INTO question (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO question (exam_id, question_text, option_a, option_b, option_c, option_d, correct_answer, question_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     Statement.RETURN_GENERATED_KEYS
                 );
                 ps.setLong(1, question.getExamId());
@@ -39,6 +39,7 @@ public class QuestionRepository {
                 ps.setString(5, question.getOptionC());
                 ps.setString(6, question.getOptionD());
                 ps.setString(7, question.getCorrectAnswer());
+                ps.setString(8, question.getQuestionType() != null ? question.getQuestionType() : "multiple_choice");
                 return ps;
             }, keyHolder);
             

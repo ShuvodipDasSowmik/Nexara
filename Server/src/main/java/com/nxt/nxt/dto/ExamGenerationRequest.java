@@ -7,6 +7,8 @@ public class ExamGenerationRequest {
     private UUID studentId;
     private String title;
     private String description;
+    private Integer questionCount;
+    private String examType; // "multiple_choice" or "subjective"
 
     public String getInputText() { return inputText; }
     public void setInputText(String inputText) { this.inputText = inputText; }
@@ -20,12 +22,20 @@ public class ExamGenerationRequest {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
 
+    public Integer getQuestionCount() { return questionCount; }
+    public void setQuestionCount(Integer questionCount) { this.questionCount = questionCount; }
+
+    public String getExamType() { return examType; }
+    public void setExamType(String examType) { this.examType = examType; }
+
     public ExamGenerationRequest() {}
 
-    public ExamGenerationRequest(String inputText, UUID studentId, String title, String description) {
+    public ExamGenerationRequest(String inputText, UUID studentId, String title, String description, Integer questionCount, String examType) {
         this.inputText = inputText;
         this.studentId = studentId;
         this.title = title;
         this.description = description;
+        this.questionCount = questionCount;
+        this.examType = examType;
     }
 }

@@ -14,7 +14,7 @@ const Tools = () => {
                     Nexara Tools
                 </h1>
                 <p className="relative text-lg text-gray-300 mb-2 z-10">
-                    Enhance your productivity with our suite of AI-powered utilities.
+                    Upload PDFs and generate custom exams with AI
                 </p>
             </section>
             
@@ -23,7 +23,6 @@ const Tools = () => {
                 <PDFParser className="w-full" />
                 <StartExam />
             </div>
-            {/* Add more tools or components here as needed */}
         </div>
     );
 };

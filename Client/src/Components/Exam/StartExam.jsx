@@ -9,6 +9,8 @@ const StartExam = () => {
   const [inputText, setInputText] = useState('');
   const [title, setTitle] = useState('AI Generated Exam');
   const [description, setDescription] = useState('Created from topic');
+  const [questionCount, setQuestionCount] = useState(5);
+  const [examType, setExamType] = useState('multiple_choice');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -19,11 +21,24 @@ const StartExam = () => {
     setError('');
     try {
       if (!user || !user.id) throw new Error('User not logged in or missing ID');
-      const payload = { inputText, title, description, studentId: user.id };
+      const payload = { 
+        inputText: inputText, 
+        questionCount: questionCount, 
+        examType: examType,
+        title, 
+        description, 
+        studentId: user.id 
+      };
       const res = await API.post('/exam/generate', payload);
       const examId = res?.data?.examId;
       if (!examId) throw new Error('No examId returned');
-      navigate(`/exam/${examId}/take`);
+      
+      // Redirect to appropriate interface based on exam type
+      if (examType === 'subjective') {
+        navigate(`/exam/${examId}/subjective`);
+      } else {
+        navigate(`/exam/${examId}/take`);
+      }
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || 'Failed to generate exam');
     } finally {
@@ -96,6 +111,31 @@ const StartExam = () => {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Number of Questions</label>
+          <select
+            className="w-full p-2 rounded bg-gray-900/70 text-gray-100 border border-gray-700"
+            value={questionCount}
+            onChange={(e) => setQuestionCount(parseInt(e.target.value))}
+          >
+            <option value={3}>3 Questions</option>
+            <option value={5}>5 Questions</option>
+            <option value={10}>10 Questions</option>
+            <option value={15}>15 Questions</option>
+            <option value={20}>20 Questions</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-300 mb-1">Exam Type</label>
+          <select
+            className="w-full p-2 rounded bg-gray-900/70 text-gray-100 border border-gray-700"
+            value={examType}
+            onChange={(e) => setExamType(e.target.value)}
+          >
+            <option value="multiple_choice">Multiple Choice</option>
+            <option value="subjective">Subjective (Essay Questions)</option>
+          </select>
         </div>
         <button
           type="submit"

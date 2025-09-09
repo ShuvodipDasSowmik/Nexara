@@ -7,6 +7,7 @@ public class QuestionDTO {
     private String optionB;
     private String optionC;
     private String optionD;
+    private String questionType; // "multiple_choice" or "subjective"
 
     public QuestionDTO() {}
 
@@ -17,6 +18,17 @@ public class QuestionDTO {
         this.optionB = optionB;
         this.optionC = optionC;
         this.optionD = optionD;
+        this.questionType = "multiple_choice"; // default
+    }
+
+    public QuestionDTO(Integer id, String questionText, String optionA, String optionB, String optionC, String optionD, String questionType) {
+        this.id = id;
+        this.questionText = questionText;
+        this.optionA = optionA;
+        this.optionB = optionB;
+        this.optionC = optionC;
+        this.optionD = optionD;
+        this.questionType = questionType;
     }
 
     public Integer getId() { return id; }
@@ -36,4 +48,7 @@ public class QuestionDTO {
 
     public String getOptionD() { return optionD; }
     public void setOptionD(String optionD) { this.optionD = optionD; }
+
+    public String getQuestionType() { return questionType; }
+    public void setQuestionType(String questionType) { this.questionType = questionType; }
 }

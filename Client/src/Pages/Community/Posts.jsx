@@ -43,9 +43,7 @@ const Posts = () => {
 
     const fetchPosts = async () => {
         try {
-            console.log('Fetching posts...');
             const response = await API.get('/posts');
-            console.log('Posts response:', response);
             setPosts(response.data);
             
             // Fetch vote and comment counts for each post
@@ -104,13 +102,7 @@ const Posts = () => {
                 studentId: user.id
                 // Remove studentName since it's not part of the Post entity
             };
-
-            console.log('Sending post data:', postData);
-            console.log('User object:', user);
-
             const response = await API.post('/posts', postData);
-
-            console.log('Post creation response:', response);
 
             if (response.status === 201) {
                 setNewPost({ title: '', content: '' });
