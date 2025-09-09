@@ -62,7 +62,8 @@ public class VectorDB {
             this.client = new QdrantClient(builder.build());
             System.out.println("Qdrant client initialized successfully");
 
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Failed to initialize Qdrant client: " + e.getMessage());
             e.printStackTrace();
         }
@@ -97,7 +98,8 @@ public class VectorDB {
                     .get();
 
             System.out.println("Upsert response: " + response);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.out.println("Error during upsert: " + e.getMessage());
         }
     }
@@ -144,7 +146,8 @@ public class VectorDB {
                     .get();
 
             System.out.println("General upsert response: " + response);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.out.println("Error during general upsert: " + e.getMessage());
         }
     }
@@ -179,6 +182,8 @@ public class VectorDB {
             var searchResponse = client.searchAsync(searchRequest).get();
 
             List<String> results = new ArrayList<>();
+
+            // Iterate directly over searchResponse
             for (ScoredPoint point : searchResponse) {
                 if (point.getPayloadMap().containsKey("text")) {
                     String value = point.getPayloadMap().get("text").getStringValue();
@@ -187,9 +192,55 @@ public class VectorDB {
             }
 
             return results;
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.out.println("Error during keyword+user search: " + e.getMessage());
-            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Search for similar items by keyword only (no username filtering).
+     * Only search for similarity in "text" where keyword is TRUE.
+     */
+    public List<String> getSimilarByKeyword(List<Double> queryVector, String keyword, int k) {
+        try {
+            List<Float> floatVector = queryVector.stream()
+                    .map(Double::floatValue)
+                    .toList();
+
+            // Only filter by keyword (never "text")
+            if ("text".equals(keyword)) {
+                throw new IllegalArgumentException("Do not use 'text' as a filter keyword. Use a domain keyword like 'chat' or 'pdfdata'.");
+            }
+
+            SearchPoints searchRequest = SearchPoints.newBuilder()
+                    .setCollectionName(collectionName)
+                    .setVectorName("text")
+                    .addAllVector(floatVector)
+                    .setFilter(Filter.newBuilder()
+                            .addMust(matchKeyword(keyword, "TRUE"))
+                            .build())
+                    .setLimit(k)
+                    .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true).build())
+                    .build();
+
+            var searchResponse = client.searchAsync(searchRequest).get();
+
+            List<String> results = new ArrayList<>();
+
+            // Iterate directly over searchResponse
+            for (ScoredPoint point : searchResponse) {
+                if (point.getPayloadMap().containsKey("text")) {
+                    String value = point.getPayloadMap().get("text").getStringValue();
+                    results.add(value);
+                }
+            }
+
+            return results;
+        }
+        catch (Exception e) {
+            System.out.println("Error during keyword-only search: " + e.getMessage());
             return new ArrayList<>();
         }
     }

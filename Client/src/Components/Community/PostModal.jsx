@@ -1,53 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../Context/AuthContext';
+import { usePosts } from '../../Context/PostsContext';
 import API from '../../API/axios';
 import CommentSection from './CommentSection';
 
 const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, userVote: initialUserVote }) => {
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [voteCount, setVoteCount] = useState(0);
-    const [commentCount, setCommentCount] = useState(0);
-    const [userVote, setUserVote] = useState(initialUserVote || 0);
     const { user } = useAuth();
+    const { voteCounts, commentCounts, userVotes, handleVote: handleVoteFromContext, updateCommentCount } = usePosts();
+
+    // Get current values from context
+    const voteCount = voteCounts[post?.id] || 0;
+    const commentCount = commentCounts[post?.id] || 0;
+    const userVote = userVotes[post?.id] || 0;
 
     useEffect(() => {
         if (isOpen && post) {
             fetchComments();
-            fetchVoteCount();
-            fetchCommentCount();
-            // initialize userVote from prop
-            setUserVote(initialUserVote || 0);
-            // if prop missing and user exists, try fetching authoritative value
-            if ((!initialUserVote || initialUserVote === 0) && user) {
-                API.get(`/posts/${post.id}/vote?studentId=${user.id}`)
-                    .then(resp => setUserVote(resp.data || 0))
-                    .catch(err => { /* ignore */ });
-            }
         }
-    }, [isOpen, post, initialUserVote]);
-
-    const fetchVoteCount = async () => {
-        if (!post) return;
-        
-        try {
-            const response = await API.get(`/posts/${post.id}/votes`);
-            setVoteCount(response.data);
-        } catch (error) {
-            console.error('Error fetching vote count:', error);
-        }
-    };
-
-    const fetchCommentCount = async () => {
-        if (!post) return;
-        
-        try {
-            const response = await API.get(`/posts/${post.id}/comments/count`);
-            setCommentCount(response.data);
-        } catch (error) {
-            console.error('Error fetching comment count:', error);
-        }
-    };
+    }, [isOpen, post]);
 
     const fetchComments = async () => {
         if (!post) return;
@@ -68,13 +40,8 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
         if (!user) return;
 
         try {
-            const endpoint = voteType === 1 ? 'upvote' : 'downvote';
-            await API.post(`/posts/${post.id}/${endpoint}?studentId=${user.id}`);
+            await handleVoteFromContext(post.id, voteType);
             showNotification(`${voteType === 1 ? 'Upvoted' : 'Downvoted'} successfully!`);
-            await fetchVoteCount();
-            // refresh user's vote for this post
-            const resp = await API.get(`/posts/${post.id}/vote?studentId=${user.id}`);
-            setUserVote(resp.data || 0);
             onPostUpdate();
         } catch (error) {
             console.error('Error voting:', error);
@@ -84,7 +51,7 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
 
     const handleCommentAdded = () => {
         fetchComments();
-        fetchCommentCount();
+        updateCommentCount(post.id, commentCount + 1);
         onPostUpdate();
     };
 

@@ -67,4 +67,12 @@ public class PostRepository {
     public void deleteById(UUID id) {
         jdbc.update("DELETE FROM posts WHERE id = ?", id);
     }
+
+    public List<Post> findByContentContaining(String contentPattern) {
+        return jdbc.query(
+            "SELECT * FROM posts WHERE content LIKE ?",
+            new BeanPropertyRowMapper<>(Post.class),
+            "%" + contentPattern + "%"
+        );
+    }
 }
