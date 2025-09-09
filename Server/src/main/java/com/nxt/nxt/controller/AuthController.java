@@ -14,8 +14,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.nxt.nxt.entity.Student;
-import com.nxt.nxt.repositories.StudentRepository;
+import com.nxt.nxt.entity.User;
+import com.nxt.nxt.repositories.UserRepository;
 import com.nxt.nxt.security.JWTUtil;
 
 import jakarta.servlet.http.Cookie;
@@ -26,32 +26,38 @@ import jakarta.servlet.http.HttpServletResponse;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    private final StudentRepository repo;
+    private final UserRepository userRepo;
     private final PasswordEncoder encoder;
     private final JWTUtil jwtUtil;
 
-    public AuthController(StudentRepository repo, PasswordEncoder encoder, JWTUtil jwtUtil) {
-        this.repo = repo;
+    public AuthController(UserRepository userRepo, PasswordEncoder encoder, JWTUtil jwtUtil) {
+        this.userRepo = userRepo;
         this.encoder = encoder;
         this.jwtUtil = jwtUtil;
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<Map<String, Object>> signup(@RequestBody Student student) {
+    public ResponseEntity<Map<String, Object>> signup(@RequestBody User user) {
         try {
-            System.out.println("Received signup request for: " + student.getUsername());
-            if (student.getId() == null) {
-                student.setId(UUID.randomUUID());
+            System.out.println("Received signup request for: " + user.getUsername());
+            if (user.getId() == null) {
+                user.setId(UUID.randomUUID());
             }
-            student.setPassword(encoder.encode(student.getPassword()));
+            
+            // Default role to 'student' if not specified
+            if (user.getRole() == null || user.getRole().trim().isEmpty()) {
+                user.setRole("student");
+            }
+            
+            user.setPassword(encoder.encode(user.getPassword()));
 
-            repo.save(student);
-            System.out.println("Successfully saved student: " + student.getUsername());
+            userRepo.save(user);
+            System.out.println("Successfully saved user: " + user.getUsername());
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "User created successfully");
-            response.put("username", student.getUsername());
+            response.put("username", user.getUsername());
             
             return ResponseEntity.ok(response);
             
@@ -62,9 +68,9 @@ public class AuthController {
             errorResponse.put("success", false);
             
             // Check if it's a username or email duplicate
-            if (e.getMessage().contains("students_username_key")) {
+            if (e.getMessage().contains("users_username_key")) {
                 errorResponse.put("message", "Username already exists. Please choose a different username.");
-            } else if (e.getMessage().contains("students_email_key")) {
+            } else if (e.getMessage().contains("users_email_key")) {
                 errorResponse.put("message", "Email already exists. Please use a different email address.");
             } else {
                 errorResponse.put("message", "User with this information already exists.");
@@ -101,26 +107,28 @@ public class AuthController {
 
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
-        // System.out.println("Received signin request with credentials: " +
-        // credentials);
-        Optional<Student> userOpt = Optional.empty();
+        Optional<User> userOpt = Optional.empty();
 
+        // Check by username first
         if (credentials.containsKey("username")) {
-            userOpt = repo.findByUsername(credentials.get("username"));
+            userOpt = userRepo.findByUsername(credentials.get("username"));
         }
 
+        // If not found and email provided, check by email
         if (userOpt.isEmpty() && credentials.containsKey("email")) {
-            userOpt = repo.findByEmail(credentials.get("email"));
+            userOpt = userRepo.findByEmail(credentials.get("email"));
         }
 
+        // Authenticate user
         if (userOpt.isPresent() && encoder.matches(credentials.get("password"), userOpt.get().getPassword())) {
-            String accessToken = jwtUtil.generateAccessToken(userOpt.get().getUsername());
-            String refreshToken = jwtUtil.generateRefreshToken(userOpt.get().getUsername());
+            User user = userOpt.get();
+            String accessToken = jwtUtil.generateAccessToken(user.getUsername());
+            String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
 
             setCookie(response, "refreshToken", refreshToken, 60 * 60 * 24 * 7);
             setCookie(response, "accessToken", accessToken, 60 * 60);
 
-            Map<String, Object> result = Map.of("user", userOpt.get());
+            Map<String, Object> result = Map.of("user", user);
             return ResponseEntity.ok(result);
         }
 
@@ -180,7 +188,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<Student> getCurrentUser(HttpServletRequest request) {
+    public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
         String accessToken = null;
 
@@ -198,21 +206,21 @@ public class AuthController {
         }
 
         try {
-            // parse username once and validate token; parsing can throw if token
-            // invalid/expired
             String username = jwtUtil.extractUsername(accessToken);
 
             if (!jwtUtil.isValidToken(accessToken, username)) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
             }
 
-            Optional<Student> userOpt = repo.findByUsername(username);
-            return userOpt.map(ResponseEntity::ok)
-                    .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+            Optional<User> userOpt = userRepo.findByUsername(username);
+            if (userOpt.isPresent()) {
+                return ResponseEntity.ok(userOpt.get());
+            }
+
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
         catch (Exception e) {
-            // token parsing/validation failed
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
     }

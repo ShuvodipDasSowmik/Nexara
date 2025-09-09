@@ -18,6 +18,8 @@ import Home from './Pages/Home'
 import Header from './Components/SiteChrome/Header'
 import Footer from './Components/SiteChrome/Footer'
 import Posts from './Pages/Community/Posts'
+import AdminAuth from './Pages/Admin/AdminAuth'
+import AdminDashboard from './Pages/Admin/AdminDashboard'
 
 function App() {
   return (
@@ -32,6 +34,10 @@ function App() {
               <Route path="/chat" element={<Chat />} />
               <Route path="/chat/:ct_id" element={<Chat />} />
               <Route path="/signup" element={<SignUp />} />
+              <Route path="/signin" element={<SignUp />} />
+              <Route path="/admin/signin" element={<AdminAuth />} />
+              <Route path="/admin/signup" element={<AdminAuth />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/community/posts" element={<Posts />} />
               <Route
                 path="/user/dashboard"

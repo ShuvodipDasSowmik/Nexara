@@ -81,7 +81,9 @@ export function AuthProvider({ children }) {
         signin,
         signup,
         logout,
-        isLoggedIn: !!user
+        isLoggedIn: !!user,
+        isAdmin: user?.role === 'admin',
+        isStudent: user?.role === 'student'
     };
 
     return (

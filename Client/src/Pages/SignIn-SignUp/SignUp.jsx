@@ -390,6 +390,19 @@ export default function AuthPage() {
               >
                 {mode === 'signin' ? 'Sign In' : 'Sign Up'}
               </button>
+              
+              {/* Admin Login Link */}
+              {mode === 'signin' && (
+                <div className="text-center mt-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/admin/signin')}
+                    className="text-xs text-gray-400 hover:text-blue-400 transition-colors"
+                  >
+                    Admin? Sign in here
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
