@@ -30,6 +30,9 @@ const Posts = () => {
         handleVote: handleVoteFromContext
     } = usePosts();
 
+    // filter out posts created by the current user
+    const visiblePosts = posts.filter(p => p.studentName !== user.username);
+
     // Auto-hide notification after 5 seconds
     useEffect(() => {
         if (notification) {
@@ -39,6 +42,11 @@ const Posts = () => {
             return () => clearTimeout(timer);
         }
     }, [notification]);
+
+    useEffect(() => {
+        console.log("User:", user);
+    }, [user]);
+        
 
     const showNotification = (message, type = 'success') => {
         setNotification({ message, type });
@@ -53,7 +61,7 @@ const Posts = () => {
             const postData = {
                 title: newPost.title.trim(),
                 content: newPost.content.trim(),
-                studentId: user.id
+                studentId: user.studentId
             };
 
             console.log('Sending post data:', postData);
@@ -171,22 +179,22 @@ const Posts = () => {
                     <div className="flex items-center space-x-4">
                         <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                             <span className="text-white font-bold">
-                                {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                                {user.username?.charAt(0)?.toUpperCase() || 'U'}
                             </span>
                         </div>
                         <div className="flex-1 bg-gray-700/50 rounded-full px-4 py-3 text-gray-400 hover:bg-gray-700 transition-colors">
-                            Have a study question, resource, or need a study buddy, {user.name?.split(' ')[0]}?
+                            Have a study question, resource, or need a study buddy, {user.username?.split(' ')[0]}?
                         </div>
                     </div>
                 </div>
 
                 {/* Posts Feed - Responsive Grid */}
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
-                    {posts.map(post => (
+                    {visiblePosts.map(post => (
                         <PostCard
                             key={post.id}
                             post={post}
-                            userId={user.id}
+                            userId={user.studentId}
                             editingPost={editingPost}
                             setEditingPost={setEditingPost}
                             updatePost={updatePost}
@@ -200,7 +208,7 @@ const Posts = () => {
                     ))}
                 </div>
                 
-                {posts.length === 0 && (
+                {visiblePosts.length === 0 && (
                     <div className="text-center py-16 max-w-2xl mx-auto">
                         <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
                             <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

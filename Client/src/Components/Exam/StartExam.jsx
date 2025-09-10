@@ -15,19 +15,24 @@ const StartExam = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  useEffect(() => {
+    console.log('user in StartExam:', user);
+    
+  }, [user, location, navigate]);
+
   const handleGenerate = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
-      if (!user || !user.id) throw new Error('User not logged in or missing ID');
+      if (!user || !user.studentId) throw new Error('User not logged in or missing student ID');
       const payload = { 
         inputText: inputText, 
         questionCount: questionCount, 
         examType: examType,
         title, 
         description, 
-        studentId: user.id 
+        studentId: user.studentId 
       };
       const res = await API.post('/exam/generate', payload);
       const examId = res?.data?.examId;

@@ -39,8 +39,9 @@ public class OpenAIService {
         } else {
             // Hardcoded system message describing Nexara's role for general chat
             systemMessage = new ChatMessage("system",
-                "You are Nexara, an education-related chat assistant. You help students learn and explore more." + 
+                "You are Nexara, an education-related chat assistant. You help students learn and explore more." +
                 "Always respond in a friendly and encouraging manner." + 
+                "Never make up answers or stories. If you don't know something, just say you don't know." +
                 "Focus on providing clear, step-by-step explanations suitable for high school students." + 
                 "If you are unsure about an answer, admit it and suggest ways to find out more." + 
                 "Never provide medical, legal, or personal advice.");
