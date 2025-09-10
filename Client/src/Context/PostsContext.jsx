@@ -70,7 +70,7 @@ export const PostsProvider = ({ children }) => {
             const newUserVotes = {};
             if (user) {
                 const userVotePromises = fetchedPosts.map(post => 
-                    API.get(`/posts/${post.id}/vote?studentId=${user.id}`).catch(() => ({ data: 0 }))
+                    API.get(`/posts/${post.id}/vote?studentId=${user.studentId}`).catch(() => ({ data: 0 }))
                 );
                 const userVoteResponses = await Promise.all(userVotePromises);
                 
@@ -177,7 +177,7 @@ export const PostsProvider = ({ children }) => {
 
             if (currentVote === voteType) {
                 // Remove vote if clicking the same vote type
-                response = await API.delete(`/posts/${postId}/vote?studentId=${user.id}`);
+                response = await API.delete(`/posts/${postId}/vote?studentId=${user.studentId}`);
                 setUserVotes(prev => ({ ...prev, [postId]: 0 }));
                 setVoteCounts(prev => ({ 
                     ...prev, 
@@ -186,7 +186,7 @@ export const PostsProvider = ({ children }) => {
             } else {
                 // Add or change vote
                 const endpoint = voteType === 1 ? 'upvote' : 'downvote';
-                response = await API.post(`/posts/${postId}/${endpoint}?studentId=${user.id}`);
+                response = await API.post(`/posts/${postId}/${endpoint}?studentId=${user.studentId}`);
                 
                 const oldVote = userVotes[postId] || 0;
                 const voteDifference = voteType - oldVote;

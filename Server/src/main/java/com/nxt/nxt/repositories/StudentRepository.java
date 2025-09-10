@@ -21,8 +21,8 @@ public class StudentRepository {
 
     public void save(Student s) {
         jdbc.update(
-            "INSERT INTO students (id, full_name, username, password, institute, education_level, email) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            s.getId(), s.getFullName(), s.getUsername(), s.getPassword(), s.getInstitute(), s.getEducationLevel(), s.getEmail()
+            "INSERT INTO students (id, full_name, username, password, institute, education_level, email, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            s.getId(), s.getFullName(), s.getUsername(), s.getPassword(), s.getInstitute(), s.getEducationLevel(), s.getEmail(), s.getUserId()
         );
     }
 

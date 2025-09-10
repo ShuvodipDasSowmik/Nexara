@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.nxt.nxt.entity.User;
+import com.nxt.nxt.entity.Student;
 import com.nxt.nxt.repositories.UserRepository;
+import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.security.JWTUtil;
 
 import jakarta.servlet.http.Cookie;
@@ -27,32 +29,51 @@ import jakarta.servlet.http.HttpServletResponse;
 public class AuthController {
 
     private final UserRepository userRepo;
+    private final StudentRepository studentRepo;
     private final PasswordEncoder encoder;
     private final JWTUtil jwtUtil;
 
-    public AuthController(UserRepository userRepo, PasswordEncoder encoder, JWTUtil jwtUtil) {
+    public AuthController(UserRepository userRepo, StudentRepository studentRepo, PasswordEncoder encoder, JWTUtil jwtUtil) {
         this.userRepo = userRepo;
+        this.studentRepo = studentRepo;
         this.encoder = encoder;
         this.jwtUtil = jwtUtil;
     }
 
     @PostMapping("/signup")
-    public ResponseEntity<Map<String, Object>> signup(@RequestBody User user) {
+    public ResponseEntity<Map<String, Object>> signup(@RequestBody Student studentRequest) {
         try {
-            System.out.println("Received signup request for: " + user.getUsername());
-            if (user.getId() == null) {
-                user.setId(UUID.randomUUID());
-            }
+            System.out.println("Received signup request for: " + studentRequest.getUsername());
             
-            // Default role to 'student' if not specified
-            if (user.getRole() == null || user.getRole().trim().isEmpty()) {
-                user.setRole("student");
-            }
+            // Generate a unique ID for the user
+            UUID userId = UUID.randomUUID();
             
-            user.setPassword(encoder.encode(user.getPassword()));
+            String encodedPassword = encoder.encode(studentRequest.getPassword());
+            
+            // Create User record first (primary table)
+            User user = new User();
+            user.setId(userId);
+            user.setUsername(studentRequest.getUsername());
+            user.setPassword(encodedPassword);
+            user.setEmail(studentRequest.getEmail());
+            user.setRole("student");
 
             userRepo.save(user);
             System.out.println("Successfully saved user: " + user.getUsername());
+            
+            // Create Student record with reference to user (foreign key)
+            Student student = new Student();
+            student.setId(UUID.randomUUID()); // Student table can have its own ID
+            student.setUserId(userId); // Reference to users table
+            student.setFullName(studentRequest.getFullName());
+            student.setUsername(studentRequest.getUsername());
+            student.setPassword(encodedPassword);
+            student.setEmail(studentRequest.getEmail());
+            student.setInstitute(studentRequest.getInstitute());
+            student.setEducationLevel(studentRequest.getEducationLevel());
+            
+            studentRepo.save(student);
+            System.out.println("Successfully saved student: " + student.getUsername());
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -61,16 +82,17 @@ public class AuthController {
             
             return ResponseEntity.ok(response);
             
-        } catch (org.springframework.dao.DuplicateKeyException e) {
+        }
+        catch (org.springframework.dao.DuplicateKeyException e) {
             System.err.println("Duplicate key error: " + e.getMessage());
             
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             
             // Check if it's a username or email duplicate
-            if (e.getMessage().contains("users_username_key")) {
+            if (e.getMessage().contains("users_username_key") || e.getMessage().contains("students_username_key")) {
                 errorResponse.put("message", "Username already exists. Please choose a different username.");
-            } else if (e.getMessage().contains("users_email_key")) {
+            } else if (e.getMessage().contains("users_email_key") || e.getMessage().contains("students_email_key")) {
                 errorResponse.put("message", "Email already exists. Please use a different email address.");
             } else {
                 errorResponse.put("message", "User with this information already exists.");
@@ -214,7 +236,28 @@ public class AuthController {
 
             Optional<User> userOpt = userRepo.findByUsername(username);
             if (userOpt.isPresent()) {
-                return ResponseEntity.ok(userOpt.get());
+                User user = userOpt.get();
+                
+                // Also get the corresponding student information
+                Optional<Student> studentOpt = studentRepo.findByUsername(username);
+                
+                // Create a response with both user and student information
+                Map<String, Object> response = new HashMap<>();
+                response.put("id", user.getId());
+                response.put("username", user.getUsername());
+                response.put("email", user.getEmail());
+                response.put("role", user.getRole());
+                response.put("createdAt", user.getCreatedAt());
+                response.put("updatedAt", user.getUpdatedAt());
+                
+                if (studentOpt.isPresent()) {
+                    response.put("studentId", studentOpt.get().getId());
+                }
+                else {
+                    response.put("studentId", null);
+                }
+                
+                return ResponseEntity.ok(response);
             }
 
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();

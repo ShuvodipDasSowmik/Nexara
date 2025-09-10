@@ -18,8 +18,7 @@ const CommentSection = ({ postId, comments, loading, onCommentAdded, showNotific
         try {
             const response = await API.post(`/posts/${postId}/comments`, {
                 content: commentText,
-                studentId: user.id,
-                studentName: user.name,
+                studentId: user.studentId,
                 parentId: parentId
             });
 

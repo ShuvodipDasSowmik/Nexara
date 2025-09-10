@@ -10,6 +10,7 @@ public class Student {
     private String institute;
     private String educationLevel;
     private String email;
+    private UUID user_id;
     
     // Getters & Setters
     public UUID getId() {
@@ -70,6 +71,14 @@ public class Student {
         this.email = email;
     }
 
+    public UUID getUserId() {
+        return user_id;
+    }
+
+    public void setUserId(UUID user_id) {
+        this.user_id = user_id;
+    }
+
     @Override
     public String toString() {
         return "Student{" +
@@ -80,6 +89,7 @@ public class Student {
                 ", email='" + email + '\'' +
                 ", institute='" + institute + '\'' +
                 ", educationLevel='" + educationLevel + '\'' +
+                ", user_id=" + user_id +
                 '}';
     }
 

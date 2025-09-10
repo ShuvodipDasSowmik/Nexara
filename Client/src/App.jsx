@@ -27,10 +27,14 @@ function App() {
       <AuthProvider>
         <PostsProvider>
           <BrowserRouter>
-            <Header />
-
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={
+                <>
+                  <Header />
+                  <Home />
+                </>
+              }
+              />
               <Route path="/chat" element={<Chat />} />
               <Route path="/chat/:ct_id" element={<Chat />} />
               <Route path="/signup" element={<SignUp />} />
@@ -38,11 +42,18 @@ function App() {
               <Route path="/admin/signin" element={<AdminAuth />} />
               <Route path="/admin/signup" element={<AdminAuth />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/community/posts" element={<Posts />} />
+              <Route path="/community/posts" element={
+                <>
+                  <Header />
+                  <Posts />
+                </>
+              }
+              />
               <Route
                 path="/user/dashboard"
                 element={
                   <ProtectedRoute>
+                    <Header />
                     <UserDashboard />
                   </ProtectedRoute>
                 }
@@ -55,31 +66,37 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-            <Route
-              path="/exam/:examId/subjective"
-              element={
-                <ProtectedRoute>
-                  <SubjectiveExam />
-                </ProtectedRoute>
+              <Route
+                path="/exam/:examId/subjective"
+                element={
+                  <ProtectedRoute>
+                    <SubjectiveExam />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exam/:examId/subjective-results"
+                element={
+                  <ProtectedRoute>
+                    <SubjectiveResults />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exam/:examId/summary"
+                element={
+                  <ProtectedRoute>
+                    <ExamSummary />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/tools" element={
+                <>
+                  <Header />
+                  <Tools />
+                </>
               }
-            />
-            <Route
-              path="/exam/:examId/subjective-results"
-              element={
-                <ProtectedRoute>
-                  <SubjectiveResults />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/exam/:examId/summary"
-              element={
-                <ProtectedRoute>
-                  <ExamSummary />
-                </ProtectedRoute>
-              }
-            />
-              <Route path="/tools" element={<Tools />} />
+              />
               <Route path="*" element={<NotFound />} />
               <Route path="/unauthorized" element={<Unauthorized />} />
             </Routes>

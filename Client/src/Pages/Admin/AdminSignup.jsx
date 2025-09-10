@@ -95,22 +95,22 @@ export default function AdminSignup() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-xl border border-gray-100 p-8 w-full max-w-md">
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Registration</h1>
-                    <p className="text-gray-600">Create an administrator account</p>
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center px-4 py-8">
+            <div className="bg-white/5 backdrop-blur-sm w-full rounded-2xl shadow-md p-2 border border-gray-700/50 flex flex-col justify-center max-w-sm">
+                <div className="text-center mb-2">
+                    <h1 className="text-lg font-medium text-white mb-0">Admin Registration</h1>
+                    <p className="text-gray-200 text-[11px] mt-0.5">Create an administrator account</p>
                 </div>
 
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-red-600 text-sm">{error}</p>
+                    <div className="mb-6 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-300 text-sm">
+                        {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-1">
                     <div>
-                        <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="username" className="block text-xs font-medium text-gray-300 mb-1">
                             Username
                         </label>
                         <input
@@ -119,14 +119,14 @@ export default function AdminSignup() {
                             name="username"
                             value={formData.username}
                             onChange={handleChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-2 py-1 text-xs bg-gray-900/60 text-gray-100 border border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
                             placeholder="Enter your username"
                             required
                         />
                     </div>
 
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="email" className="block text-xs font-medium text-gray-300 mb-1">
                             Email
                         </label>
                         <input
@@ -135,14 +135,14 @@ export default function AdminSignup() {
                             name="email"
                             value={formData.email}
                             onChange={handleChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-2 py-1 text-xs bg-gray-900/60 text-gray-100 border border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
                             placeholder="Enter your email"
                             required
                         />
                     </div>
 
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="password" className="block text-xs font-medium text-gray-300 mb-1">
                             Password
                         </label>
                         <div className="relative">
@@ -152,14 +152,14 @@ export default function AdminSignup() {
                                 name="password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                                className="w-full px-2 py-1 text-xs bg-gray-900/60 text-gray-100 border border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 pr-7"
                                 placeholder="Enter your password"
                                 required
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-300"
                             >
                                 {showPassword ? "👁️" : "👁️‍🗨️"}
                             </button>
@@ -167,7 +167,7 @@ export default function AdminSignup() {
                     </div>
 
                     <div>
-                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="confirmPassword" className="block text-xs font-medium text-gray-300 mb-1">
                             Confirm Password
                         </label>
                         <div className="relative">
@@ -177,14 +177,14 @@ export default function AdminSignup() {
                                 name="confirmPassword"
                                 value={formData.confirmPassword}
                                 onChange={handleChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
+                                className="w-full px-2 py-1 text-xs bg-gray-900/60 text-gray-100 border border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400 pr-7"
                                 placeholder="Confirm your password"
                                 required
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                className="absolute inset-y-0 right-0 pr-2 flex items-center text-gray-400 hover:text-gray-300"
                             >
                                 {showConfirmPassword ? "👁️" : "👁️‍🗨️"}
                             </button>
@@ -192,7 +192,7 @@ export default function AdminSignup() {
                     </div>
 
                     <div>
-                        <label htmlFor="adminKey" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="adminKey" className="block text-xs font-medium text-gray-300 mb-1">
                             Admin Registration Key
                         </label>
                         <input
@@ -201,11 +201,11 @@ export default function AdminSignup() {
                             name="adminKey"
                             value={formData.adminKey}
                             onChange={handleChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-2 py-1 text-xs bg-gray-900/60 text-gray-100 border border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
                             placeholder="Enter admin registration key"
                             required
                         />
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-[11px] text-gray-400 mt-1">
                             Contact system administrator for the registration key
                         </p>
                     </div>
@@ -213,12 +213,12 @@ export default function AdminSignup() {
                     <button
                         type="submit"
                         disabled={submitting}
-                        className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="w-full py-1 px-2 mt-1 bg-gray-900 text-white font-medium rounded-md hover:bg-gray-700 transition-all duration-150 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {submitting ? (
                             <div className="flex items-center justify-center">
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                                Creating Account...
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                                <span className="text-xs">Creating Account...</span>
                             </div>
                         ) : (
                             'Create Admin Account'
@@ -227,11 +227,11 @@ export default function AdminSignup() {
                 </form>
 
                 <div className="mt-6 text-center">
-                    <p className="text-gray-600">
+                    <p className="text-gray-300">
                         Already have an account?{' '}
                         <button
                             onClick={() => navigate('/signin')}
-                            className="text-blue-600 hover:text-blue-500 font-medium"
+                            className="text-gray-400 hover:text-blue-400 font-medium text-[11px]"
                         >
                             Sign In
                         </button>
@@ -240,10 +240,10 @@ export default function AdminSignup() {
             </div>
 
             {submitting && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white" />
-                        <div className="text-white font-medium">Creating admin account...</div>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+                        <div className="text-white text-xs">Creating admin account...</div>
                     </div>
                 </div>
             )}

@@ -152,7 +152,7 @@ public class PostController {
                 List<PostWithStudentName> postsWithNames = posts.stream()
                         .map(post -> {
                             Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getFullName).orElse("Unknown User");
+                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
                             return new PostWithStudentName(post, studentName);
                         })
                         .toList();
@@ -171,7 +171,7 @@ public class PostController {
                 List<PostWithStudentName> postsWithNames = posts.stream()
                         .map(post -> {
                             Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getFullName).orElse("Unknown User");
+                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
                             return new PostWithStudentName(post, studentName);
                         })
                         .toList();
@@ -210,7 +210,7 @@ public class PostController {
                         
                         // Get student name
                         String studentName = studentRepository.findById(post.getStudentId())
-                                .map(Student::getFullName)
+                                .map(Student::getUsername)
                                 .orElse("Unknown User");
                         
                         scoredPosts.add(new PostWithScore(post, studentName, overallScore));
@@ -227,7 +227,7 @@ public class PostController {
                 List<PostWithStudentName> postsWithNames = posts.stream()
                         .map(post -> {
                             Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getFullName).orElse("Unknown User");
+                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
                             return new PostWithStudentName(post, studentName);
                         })
                         .toList();
@@ -255,7 +255,7 @@ public class PostController {
                 List<PostWithStudentName> postsWithNames = posts.stream()
                         .map(post -> {
                             Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getFullName).orElse("Unknown User");
+                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
                             return new PostWithStudentName(post, studentName);
                         })
                         .toList();
@@ -420,15 +420,33 @@ public class PostController {
     public ResponseEntity<CommentWithStudentName> createComment(@PathVariable UUID postId,
             @RequestBody Comment comment) {
         try {
+            System.out.println("Creating comment for post: " + postId);
+            System.out.println("Received comment: " + comment);
+            
+            // Validate that studentId is provided
+            if (comment.getStudentId() == null) {
+                System.err.println("Student ID is required for creating a comment");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            
+            // Validate content
+            if (comment.getContent() == null || comment.getContent().trim().isEmpty()) {
+                System.err.println("Comment content is null or empty");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
+            
             comment.setId(UUID.randomUUID());
             comment.setPostId(postId);
             comment.setCreatedAt(LocalDateTime.now());
             comment.setUpdatedAt(LocalDateTime.now());
+            
+            System.out.println("Saving comment with student ID: " + comment.getStudentId());
             commentRepository.save(comment);
+            System.out.println("Comment saved successfully with ID: " + comment.getId());
 
             // Fetch student name
             String studentName = studentRepository.findById(comment.getStudentId())
-                    .map(Student::getFullName)
+                    .map(Student::getUsername)
                     .orElse("Unknown User");
 
             CommentWithStudentName dto = new CommentWithStudentName(comment, studentName);
@@ -436,6 +454,8 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.CREATED).body(dto);
         }
         catch (Exception e) {
+            System.err.println("Error creating comment: " + e.getMessage());
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -447,7 +467,7 @@ public class PostController {
             List<CommentWithStudentName> dtos = comments.stream()
                     .map(c -> {
                         String studentName = studentRepository.findById(c.getStudentId())
-                                .map(Student::getFullName)
+                                .map(Student::getUsername)
                                 .orElse("Unknown User");
                         return new CommentWithStudentName(c, studentName);
                     })
@@ -467,7 +487,7 @@ public class PostController {
             List<CommentWithStudentName> dtos = comments.stream()
                     .map(c -> {
                         String studentName = studentRepository.findById(c.getStudentId())
-                                .map(Student::getFullName)
+                                .map(Student::getUsername)
                                 .orElse("Unknown User");
                         return new CommentWithStudentName(c, studentName);
                     })
@@ -486,7 +506,7 @@ public class PostController {
             List<CommentWithStudentName> dtos = replies.stream()
                     .map(c -> {
                         String studentName = studentRepository.findById(c.getStudentId())
-                                .map(Student::getFullName)
+                                .map(Student::getUsername)
                                 .orElse("Unknown User");
                         return new CommentWithStudentName(c, studentName);
                     })
@@ -505,7 +525,7 @@ public class PostController {
             
             if (comment.isPresent()) {
                 String studentName = studentRepository.findById(comment.get().getStudentId())
-                        .map(Student::getFullName)
+                        .map(Student::getUsername)
                         .orElse("Unknown User");
                 CommentWithStudentName dto = new CommentWithStudentName(comment.get(), studentName);
                 return ResponseEntity.ok(dto);

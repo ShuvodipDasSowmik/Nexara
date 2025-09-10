@@ -51,7 +51,8 @@ public class AdminController {
         if ("prod".equalsIgnoreCase(env)) {
             cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
                     name, value, maxAge, "nexara-mhfy.onrender.com");
-        } else {
+        }
+        else {
             cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly", name, value, maxAge);
         }
 
@@ -66,6 +67,7 @@ public class AdminController {
             User admin = adminService.createAdmin(request);
             
             Map<String, Object> response = new HashMap<>();
+
             response.put("success", true);
             response.put("message", "Admin user created successfully");
             response.put("admin", Map.of(
@@ -117,7 +119,8 @@ public class AdminController {
             
             return ResponseEntity.ok(result);
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error during admin signin: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "success", false,
@@ -159,8 +162,10 @@ public class AdminController {
                 "studentCount", adminService.getStudentCount()
             ));
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error fetching users: " + e.getMessage());
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "success", false,
                 "message", "Error fetching users"
@@ -186,7 +191,8 @@ public class AdminController {
                 "message", "User deleted successfully"
             ));
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error deleting user: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "success", false,
@@ -221,7 +227,8 @@ public class AdminController {
                 )
             ));
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error updating user role: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "success", false,
@@ -250,7 +257,8 @@ public class AdminController {
                 )
             ));
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error fetching admin stats: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "success", false,
@@ -284,7 +292,8 @@ public class AdminController {
             Optional<User> userOpt = userRepository.findByUsername(username);
             return userOpt.isPresent() && "admin".equals(userOpt.get().getRole());
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error verifying admin authentication: " + e.getMessage());
             return false;
         }
