@@ -4,13 +4,13 @@ import { useNavigate } from 'react-router-dom';
 const contributors = [
     {
         name: 'Shuvodip Das Sowmik',
-        facebook: 'https://facebook.com/shuvodip',
-        github: 'https://github.com/shuvodip',
+        facebook: 'https://www.facebook.com/d.sowmik',
+        github: 'https://github.com/ShuvodipDasSowmik',
     },
     {
         name: 'Md. Kaisarul Islam Estey',
-        facebook: 'https://facebook.com/kaisarul',
-        github: 'https://github.com/kaisarul',
+        facebook: 'https://www.facebook.com/skie.shahkaisarul.islamestey',
+        github: 'https://github.com/Estey144',
     },
 ];
 

@@ -1,11 +1,20 @@
 package com.nxt.nxt.controller;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-import com.nxt.nxt.dto.ChatResponse;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.nxt.nxt.entity.ChatHistory;
 import com.nxt.nxt.entity.ChatTopic;
 import com.nxt.nxt.repositories.ChatHistoryRepository;
@@ -13,10 +22,6 @@ import com.nxt.nxt.repositories.ChatTopicRepository;
 import com.nxt.nxt.service.OpenAIService;
 import com.nxt.nxt.util.EmbeddingAPI;
 import com.nxt.nxt.util.VectorDB;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/llm")
