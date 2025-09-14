@@ -25,8 +25,6 @@ public class EmbeddingAPI {
                     .clientName("Nexara")
                     .build();
 
-            System.out.println("Generating embedding for text length: " + text.length());
-
             V2EmbedRequest request = V2EmbedRequest.builder()
                     .model("embed-english-v3.0")
                     .inputType(EmbedInputType.SEARCH_DOCUMENT)
@@ -53,7 +51,6 @@ public class EmbeddingAPI {
         
         catch (Exception e) {
             System.err.println("Error calling Cohere API: " + e.getMessage());
-            e.printStackTrace();
 
             return new ArrayList<>();
         }

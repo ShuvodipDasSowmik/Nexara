@@ -40,9 +40,12 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
         if (!user) return;
 
         try {
-            await handleVoteFromContext(post.id, voteType);
-            showNotification(`${voteType === 1 ? 'Upvoted' : 'Downvoted'} successfully!`);
-            onPostUpdate();
+            const res = await handleVoteFromContext(post.id, voteType);
+            if (res && res.success === false) {
+                showNotification(res.error || 'Failed to register vote. Please try again.', 'error');
+            } else {
+                showNotification(`${voteType === 1 ? 'Upvoted' : 'Downvoted'} successfully!`);
+            }
         } catch (error) {
             console.error('Error voting:', error);
             showNotification('Failed to register vote. Please try again.', 'error');
@@ -50,9 +53,9 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
     };
 
     const handleCommentAdded = () => {
+        // Refresh comments locally and update context counts without re-fetching all posts
         fetchComments();
         updateCommentCount(post.id, commentCount + 1);
-        onPostUpdate();
     };
 
     if (!isOpen || !post) return null;

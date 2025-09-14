@@ -16,7 +16,6 @@ const StartExam = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    console.log('user in StartExam:', user);
     
   }, [user, location, navigate]);
 

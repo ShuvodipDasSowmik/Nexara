@@ -65,12 +65,7 @@ const SummaryModal = ({
   };
 
   const handleTakeExam = () => {
-    const hasValidSummary = summaryText && 
-      summaryText.trim() !== '' && 
-      !summaryText.includes('Rate limit reached') && 
-      !summaryText.includes('Failed to fetch') &&
-      !summaryText.includes('Error') &&
-      summaryText !== 'Loading summary...';
+    const hasValidSummary = summaryText && !summaryText.includes('Rate limit reached') && summaryText.trim().length > 2;
 
     if (!hasValidSummary) {
       setShowWarning(true);

@@ -42,10 +42,6 @@ const Posts = () => {
             return () => clearTimeout(timer);
         }
     }, [notification]);
-
-    useEffect(() => {
-        console.log("User:", user);
-    }, [user]);
         
 
     const showNotification = (message, type = 'success') => {
@@ -61,10 +57,12 @@ const Posts = () => {
             const postData = {
                 title: newPost.title.trim(),
                 content: newPost.content.trim(),
+                studentName: user.username,
                 studentId: user.studentId
             };
 
-            console.log('Sending post data:', postData);
+            console.log('postData to submit:', postData);
+            
 
             const result = await addPost(postData);
 
@@ -75,8 +73,8 @@ const Posts = () => {
             } else {
                 showNotification(result.error, 'error');
             }
-        } catch (error) {
-            console.error('Error creating post:', error);
+        }
+        catch (error) {
             showNotification('Failed to create post. Please try again.', 'error');
         } finally {
             setIsPosting(false);

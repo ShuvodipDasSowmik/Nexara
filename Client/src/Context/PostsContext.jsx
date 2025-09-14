@@ -95,7 +95,13 @@ export const PostsProvider = ({ children }) => {
             const response = await API.post('/posts', postData);
             
             if (response.status === 201) {
-                const newPost = response.data;
+                const returned = response.data;
+                // Ensure the UI has the poster's name/id immediately. Fall back to provided postData
+                const newPost = {
+                    ...returned,
+                    studentName: returned.studentName || postData.studentName,
+                    studentId: returned.studentId || postData.studentId,
+                };
                 // Add the new post to the beginning of the posts array
                 setPosts(prevPosts => [newPost, ...prevPosts]);
                 

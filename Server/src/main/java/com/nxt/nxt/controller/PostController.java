@@ -44,7 +44,7 @@ public class PostController {
     VectorDB vectorDB;
 
     // Remove circular dependency
-    // @Autowired 
+    // @Autowired
     // UserController userController;
 
     public PostController(PostRepository postRepository, PostVoteRepository postVoteRepository,
@@ -93,7 +93,7 @@ public class PostController {
                 // Get username from authentication context
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 String username = auth.getName();
-                
+
                 Long pointId = System.currentTimeMillis();
                 String postText = post.getContent();
                 List<Double> postEmbedding = embeddingAPI.getTextEmbedding(postText);
@@ -103,17 +103,15 @@ public class PostController {
                 payload.put("text", postText);
 
                 vectorDB.upsertWithKeywords(pointId, postEmbedding, username, payload);
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 System.out.println("Error inserting post into VectorDB: " + ex.getMessage());
                 ex.printStackTrace();
             }
 
             return ResponseEntity.status(HttpStatus.CREATED).body(post);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             System.err.println("Error creating post: " + e.getMessage());
-            
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating post: " + e.getMessage());
         }
@@ -127,16 +125,25 @@ public class PostController {
 
             System.out.println("Getting personalized posts for user: " + username);
 
-            // Create dummy vector for getting all entries by keyword (Cohere embed-english-v3.0 is 1024-dimensional)
+            // Create dummy vector for getting all entries by keyword (Cohere
+            // embed-english-v3.0 is 1024-dimensional)
             List<Double> dummyVector = new ArrayList<>();
             for (int i = 0; i < 1024; i++) {
                 dummyVector.add(0.0);
             }
 
             // Step 1: Get all user's data from VectorDB and calculate average embedding
-            List<String> userPostTexts = vectorDB.getSimilar(dummyVector, username, "post", 1000);
-            List<String> userPdfTexts = vectorDB.getSimilar(dummyVector, username, "pdfdata", 1000);
-            List<String> userChatTexts = vectorDB.getSimilar(dummyVector, username, "chat", 1000);
+            List<String> userPostTexts = new ArrayList<>();
+            List<String> userPdfTexts = new ArrayList<>();
+            List<String> userChatTexts = new ArrayList<>();
+
+            try {
+                userPostTexts = vectorDB.getSimilar(dummyVector, username, "post", 1000);
+                userPdfTexts = vectorDB.getSimilar(dummyVector, username, "pdfdata", 1000);
+                userChatTexts = vectorDB.getSimilar(dummyVector, username, "chat", 1000);
+            } catch (Exception e) {
+                System.out.println("Error retrieving user data from VectorDB: " + e.getMessage());
+            }
 
             System.out.println("User Embedding Generation Done");
 
@@ -165,7 +172,8 @@ public class PostController {
             System.out.println("User Average Embedding Calculation Done, Length: " + userAverageEmbedding.size());
 
             if (userAverageEmbedding.isEmpty()) {
-                System.out.println("Failed to calculate average embedding for user: " + username + ", returning all posts");
+                System.out.println(
+                        "Failed to calculate average embedding for user: " + username + ", returning all posts");
                 List<Post> posts = postRepository.findAll();
 
                 List<PostWithStudentName> postsWithNames = posts.stream()
@@ -178,8 +186,12 @@ public class PostController {
                 return ResponseEntity.ok(postsWithNames);
             }
 
-            // Step 2: Get all posts from VectorDB with "post" = TRUE
-            List<String> allPostTexts = vectorDB.getSimilarByKeyword(dummyVector, "post", 1000); // Use new function for all posts
+            List<String> allPostTexts = new ArrayList<>();
+            try {
+                allPostTexts = vectorDB.getSimilarByKeyword(dummyVector, "post", 1000); // Use new function
+            } catch (Exception e) {
+                System.out.println("Error retrieving all posts from VectorDB: " + e.getMessage());
+            }
 
             System.out.println("All Post Texts Retrieved: " + allPostTexts.size());
             // Step 3: Score and rank posts
@@ -197,26 +209,27 @@ public class PostController {
                         System.out.println("Processing post: " + post.getId());
                         // Get post embedding
                         List<Double> postEmbedding = embeddingAPI.getTextEmbedding(post.getContent());
-                        
+
                         // Calculate post age in hours
-                        long hoursAgo = java.time.temporal.ChronoUnit.HOURS.between(post.getCreatedAt(), LocalDateTime.now());
-                        
+                        long hoursAgo = java.time.temporal.ChronoUnit.HOURS.between(post.getCreatedAt(),
+                                LocalDateTime.now());
+
                         // Get vote count and comment count
                         int voteCount = postVoteRepository.getVoteCountByPostId(post.getId());
                         int commentCount = commentRepository.countByPostId(post.getId());
-                        
+
                         // Calculate overall score using PostRankScorer
-                        double overallScore = scorer.overallScore(voteCount, commentCount, (int)hoursAgo, postEmbedding, userAverageEmbedding);
-                        
+                        double overallScore = scorer.overallScore(voteCount, commentCount, (int) hoursAgo,
+                                postEmbedding, userAverageEmbedding);
+
                         // Get student name
                         String studentName = studentRepository.findById(post.getStudentId())
                                 .map(Student::getUsername)
                                 .orElse("Unknown User");
-                        
+
                         scoredPosts.add(new PostWithScore(post, studentName, overallScore));
                     }
-                }
-                catch (Exception e) {
+                } catch (Exception e) {
                     System.err.println("Error processing post text: " + postText + " - " + e.getMessage());
                 }
             }
@@ -273,7 +286,7 @@ public class PostController {
 
         try {
             List<List<Double>> embeddings = new ArrayList<>();
-            
+
             // Get embeddings for all texts
             for (String text : texts) {
                 if (text != null && !text.trim().isEmpty()) {
@@ -316,8 +329,7 @@ public class PostController {
             Optional<Post> post = postRepository.findById(id);
             return post.map(ResponseEntity::ok)
                     .orElse(ResponseEntity.notFound().build());
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -327,8 +339,7 @@ public class PostController {
         try {
             List<Post> posts = postRepository.findByStudentId(studentId);
             return ResponseEntity.ok(posts);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -346,8 +357,7 @@ public class PostController {
             }
 
             return ResponseEntity.notFound().build();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -363,8 +373,7 @@ public class PostController {
             }
 
             return ResponseEntity.notFound().build();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -396,8 +405,7 @@ public class PostController {
         try {
             int voteCount = postVoteRepository.getVoteCountByPostId(postId);
             return ResponseEntity.ok(voteCount);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -408,8 +416,7 @@ public class PostController {
             Optional<PostVote> vote = postVoteRepository.findByStudentIdAndPostId(studentId, postId);
             int voteType = vote.map(v -> (int) v.getVoteType()).orElse(0);
             return ResponseEntity.ok(voteType);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -422,24 +429,24 @@ public class PostController {
         try {
             System.out.println("Creating comment for post: " + postId);
             System.out.println("Received comment: " + comment);
-            
+
             // Validate that studentId is provided
             if (comment.getStudentId() == null) {
                 System.err.println("Student ID is required for creating a comment");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
-            
+
             // Validate content
             if (comment.getContent() == null || comment.getContent().trim().isEmpty()) {
                 System.err.println("Comment content is null or empty");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
-            
+
             comment.setId(UUID.randomUUID());
             comment.setPostId(postId);
             comment.setCreatedAt(LocalDateTime.now());
             comment.setUpdatedAt(LocalDateTime.now());
-            
+
             System.out.println("Saving comment with student ID: " + comment.getStudentId());
             commentRepository.save(comment);
             System.out.println("Comment saved successfully with ID: " + comment.getId());
@@ -452,8 +459,7 @@ public class PostController {
             CommentWithStudentName dto = new CommentWithStudentName(comment, studentName);
 
             return ResponseEntity.status(HttpStatus.CREATED).body(dto);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             System.err.println("Error creating comment: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -474,8 +480,7 @@ public class PostController {
                     .toList();
 
             return ResponseEntity.ok(dtos);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -493,8 +498,7 @@ public class PostController {
                     })
                     .toList();
             return ResponseEntity.ok(dtos);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -512,8 +516,7 @@ public class PostController {
                     })
                     .toList();
             return ResponseEntity.ok(dtos);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -522,7 +525,7 @@ public class PostController {
     public ResponseEntity<CommentWithStudentName> getCommentById(@PathVariable UUID id) {
         try {
             Optional<Comment> comment = commentRepository.findById(id);
-            
+
             if (comment.isPresent()) {
                 String studentName = studentRepository.findById(comment.get().getStudentId())
                         .map(Student::getUsername)
@@ -532,8 +535,7 @@ public class PostController {
             }
 
             return ResponseEntity.notFound().build();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -549,8 +551,7 @@ public class PostController {
                 return ResponseEntity.ok(comment);
             }
             return ResponseEntity.notFound().build();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -564,8 +565,7 @@ public class PostController {
                 return ResponseEntity.noContent().build();
             }
             return ResponseEntity.notFound().build();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -575,8 +575,7 @@ public class PostController {
         try {
             int commentCount = commentRepository.countByPostId(postId);
             return ResponseEntity.ok(commentCount);
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
@@ -594,23 +593,20 @@ public class PostController {
                     // Same vote type, remove the vote
                     postVoteRepository.deleteByStudentIdAndPostId(studentId, postId);
                     return ResponseEntity.ok("Vote removed");
-                }
-                else {
+                } else {
                     // Different vote type, update the vote
                     vote.setVoteType(voteType);
                     postVoteRepository.update(vote);
                     return ResponseEntity.ok("Vote updated");
                 }
-            }
-            else {
+            } else {
                 // No existing vote, create new one
                 PostVote newVote = new PostVote(studentId, postId, voteType);
                 newVote.setId(UUID.randomUUID());
                 postVoteRepository.save(newVote);
                 return ResponseEntity.ok("Vote added");
             }
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing vote");
         }
     }
@@ -709,8 +705,16 @@ public class PostController {
             this.score = score;
         }
 
-        public Post getPost() { return post; }
-        public String getStudentName() { return studentName; }
-        public double getScore() { return score; }
+        public Post getPost() {
+            return post;
+        }
+
+        public String getStudentName() {
+            return studentName;
+        }
+
+        public double getScore() {
+            return score;
+        }
     }
 }

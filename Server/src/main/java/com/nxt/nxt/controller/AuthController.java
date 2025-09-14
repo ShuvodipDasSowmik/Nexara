@@ -33,7 +33,8 @@ public class AuthController {
     private final PasswordEncoder encoder;
     private final JWTUtil jwtUtil;
 
-    public AuthController(UserRepository userRepo, StudentRepository studentRepo, PasswordEncoder encoder, JWTUtil jwtUtil) {
+    public AuthController(UserRepository userRepo, StudentRepository studentRepo, PasswordEncoder encoder,
+            JWTUtil jwtUtil) {
         this.userRepo = userRepo;
         this.studentRepo = studentRepo;
         this.encoder = encoder;
@@ -44,12 +45,12 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> signup(@RequestBody Student studentRequest) {
         try {
             System.out.println("Received signup request for: " + studentRequest.getUsername());
-            
+
             // Generate a unique ID for the user
             UUID userId = UUID.randomUUID();
-            
+
             String encodedPassword = encoder.encode(studentRequest.getPassword());
-            
+
             // Create User record first (primary table)
             User user = new User();
             user.setId(userId);
@@ -60,7 +61,7 @@ public class AuthController {
 
             userRepo.save(user);
             System.out.println("Successfully saved user: " + user.getUsername());
-            
+
             // Create Student record with reference to user (foreign key)
             Student student = new Student();
             student.setId(UUID.randomUUID()); // Student table can have its own ID
@@ -71,24 +72,23 @@ public class AuthController {
             student.setEmail(studentRequest.getEmail());
             student.setInstitute(studentRequest.getInstitute());
             student.setEducationLevel(studentRequest.getEducationLevel());
-            
+
             studentRepo.save(student);
             System.out.println("Successfully saved student: " + student.getUsername());
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "User created successfully");
             response.put("username", user.getUsername());
-            
+
             return ResponseEntity.ok(response);
-            
-        }
-        catch (org.springframework.dao.DuplicateKeyException e) {
+
+        } catch (org.springframework.dao.DuplicateKeyException e) {
             System.err.println("Duplicate key error: " + e.getMessage());
-            
+
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
-            
+
             // Check if it's a username or email duplicate
             if (e.getMessage().contains("users_username_key") || e.getMessage().contains("students_username_key")) {
                 errorResponse.put("message", "Username already exists. Please choose a different username.");
@@ -97,17 +97,17 @@ public class AuthController {
             } else {
                 errorResponse.put("message", "User with this information already exists.");
             }
-            
+
             return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
-            
+
         } catch (Exception e) {
             System.err.println("Error during signup: " + e.getMessage());
             e.printStackTrace();
-            
+
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", "Error creating user. Please try again.");
-            
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
@@ -119,8 +119,7 @@ public class AuthController {
         if ("prod".equalsIgnoreCase(env)) {
             cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; Domain=%s; HttpOnly; Secure; SameSite=None",
                     name, value, maxAge, "nexara-mhfy.onrender.com");
-        }
-        else {
+        } else {
             cookieStr = String.format("%s=%s; Max-Age=%d; Path=/; HttpOnly", name, value, maxAge);
         }
 
@@ -129,11 +128,13 @@ public class AuthController {
 
     @PostMapping("/signin")
     public ResponseEntity<?> signin(@RequestBody Map<String, String> credentials, HttpServletResponse response) {
+
         Optional<User> userOpt = Optional.empty();
 
         // Check by username first
         if (credentials.containsKey("username")) {
             userOpt = userRepo.findByUsername(credentials.get("username"));
+            System.out.println(userOpt);
         }
 
         // If not found and email provided, check by email
@@ -150,7 +151,14 @@ public class AuthController {
             setCookie(response, "refreshToken", refreshToken, 60 * 60 * 24 * 7);
             setCookie(response, "accessToken", accessToken, 60 * 60);
 
-            Map<String, Object> result = Map.of("user", user);
+            Optional<Student> studentOpt = studentRepo.findByUsername(user.getUsername());
+            studentOpt.ifPresent(student -> user.setStudentId(student.getId()));
+
+            // Use a mutable map so we can add optional fields like studentId
+            Map<String, Object> result = new HashMap<>();
+            result.put("user", user);
+            
+            System.out.println(result);
             return ResponseEntity.ok(result);
         }
 
@@ -237,10 +245,10 @@ public class AuthController {
             Optional<User> userOpt = userRepo.findByUsername(username);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
-                
+
                 // Also get the corresponding student information
                 Optional<Student> studentOpt = studentRepo.findByUsername(username);
-                
+
                 // Create a response with both user and student information
                 Map<String, Object> response = new HashMap<>();
                 response.put("id", user.getId());
@@ -249,14 +257,13 @@ public class AuthController {
                 response.put("role", user.getRole());
                 response.put("createdAt", user.getCreatedAt());
                 response.put("updatedAt", user.getUpdatedAt());
-                
+
                 if (studentOpt.isPresent()) {
                     response.put("studentId", studentOpt.get().getId());
-                }
-                else {
+                } else {
                     response.put("studentId", null);
                 }
-                
+
                 return ResponseEntity.ok(response);
             }
 

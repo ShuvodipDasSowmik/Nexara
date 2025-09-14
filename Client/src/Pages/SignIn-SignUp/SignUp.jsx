@@ -90,6 +90,7 @@ export default function AuthPage() {
         delete payload.subject;
         delete payload.confirmPassword;
         delete payload.signinIdentifier;
+        delete payload.password;
 
         // Create account first
         await API.post('/auth/signup', payload);
@@ -98,6 +99,8 @@ export default function AuthPage() {
         let user = null;
         try {
           const meRes = await API.get('/auth/me');
+          console.log("Fetched user:", meRes);
+          
           user = meRes?.data || null;
         } catch (meErr) {
           // ignore - will try signin fallback
@@ -120,21 +123,25 @@ export default function AuthPage() {
         } else {
           alert('Signup succeeded but automatic sign-in failed. Please try signing in.');
         }
-      } else {
+      }
+      else {
         const creds =
           signinBy === 'username'
             ? { username: formData.signinIdentifier, password: formData.password }
             : { email: formData.signinIdentifier, password: formData.password };
+
         const user = await signin(creds);
+
         if (user) {
-          if (user.username) localStorage.setItem('username', user.username);
-          if (user.email) localStorage.setItem('email', user.email);
           navigate('/user/dashboard');
-        } else {
+        }
+        
+        else {
           alert('Signin failed. Please check your credentials.');
         }
       }
-    } catch (err) {
+    }
+    catch (err) {
       alert(
         err?.response?.data?.message ||
         err?.message ||

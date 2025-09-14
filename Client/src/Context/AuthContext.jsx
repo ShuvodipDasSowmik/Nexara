@@ -17,17 +17,19 @@ export function AuthProvider({ children }) {
     // On mount, fetch user info from backend using cookies
     useEffect(() => {
         setLoading(true);
-        API.get("/auth/me")
-            .then(res => {
+        const fetchUser = async () => {
+            try {
+                const res = await API.get("/auth/me");                
                 setUser(res.data || null);
-            })
-            .catch((err) => {
-                // If unauthorized, clear user
-                if (err.response && err.response.status === 401) {
-                    setUser(null);
-                }
-            })
-            .finally(() => setLoading(false));
+            }
+            catch (error) {
+                setUser(null);
+            }
+            finally {
+                setLoading(false);
+            }
+        };
+        fetchUser();
     }, []);
 
     const signin = async (credentials) => {
@@ -35,8 +37,10 @@ export function AuthProvider({ children }) {
         try {
             // Send credentials to backend
             const signinRes = await API.post("/auth/signin", credentials);
+            
             // Prefer user from signin response if present, otherwise call /auth/me
-            const signedInUser = signinRes?.data?.user;
+            const signedInUser = signinRes.data.user;
+
             if (signedInUser) {
                 setUser(signedInUser);
                 return signedInUser;
@@ -46,8 +50,7 @@ export function AuthProvider({ children }) {
             setUser(res.data || null);
             return res.data || null;
         }
-        
-        catch {
+        catch (error) {            
             setUser(null);
             return null;
         }

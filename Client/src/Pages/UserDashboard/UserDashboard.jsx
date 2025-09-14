@@ -4,6 +4,7 @@ import API from "../../API/axios";
 import { useAuth } from "../../Context/AuthContext";
 import ProgressBar from "./ProgressBar";
 import LastFiveScoresChart from "./LastFiveScoresChart";
+import UserPosts from "./UserPosts";
 
 const UserDashboard = () => {
     const [user, setUser] = useState(null);
@@ -23,6 +24,7 @@ const UserDashboard = () => {
             navigate("/signup");
             return;
         }
+        console.log(user);
 
         setLoading(true);
         API.get("/users/dashboard")
@@ -89,9 +91,9 @@ const UserDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col items-center px-2 pt-8">
-            <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
                 {/* User Info Panel */}
-                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-fit">
+                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-full min-h-0">
                     <div className="flex items-center justify-between mb-6">
                         <h1 className="text-2xl font-bold text-white">Welcome, {user?.fullName}</h1>
                         <button
@@ -119,14 +121,13 @@ const UserDashboard = () => {
                 </section>
 
                 {/* Chart Panel */}
-                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-fit">
+                <section className="col-span-1 bg-gray-800/70 rounded-2xl p-6 flex flex-col shadow-sm h-full min-h-0">
                     <LastFiveScoresChart />
                 </section>
 
-                {/* PDFs Panel */}
+                {/* PDFs Panel (keep scrollable, don't stretch full height) */}
                 <section
-                    className="col-span-1 lg:col-span-1 bg-gray-800/60 rounded-2xl p-6 flex flex-col shadow-sm"
-                    style={{ maxHeight: "600px", overflowY: "auto" }}
+                    className="col-span-1 lg:col-span-1 bg-gray-800/60 rounded-2xl p-6 flex flex-col shadow-sm self-start max-h-[400px] overflow-y-auto"
                 >
                     <h2 className="text-xl font-semibold text-white mb-4">Your PDFs</h2>
                     {pdfDataList.length === 0 ? (
@@ -144,7 +145,15 @@ const UserDashboard = () => {
                     )}
                 </section>
 
+                {/* User Posts Panel */}
+
+
                 {/* Future sections can be added here as new <section> elements */}
+            </div>
+            <div className="col-span-1 lg:col-span-1 bg-gray-800/60 rounded-2xl p-6 m-12 flex flex-col shadow-sm h-full min-h-0" style={{ overflowY: 'auto' }}>
+                <h2 className="text-3xl font-semibold text-center text-white mb-4">Your Posts</h2>
+                <hr className="border-gray-700 mb-4" />
+                <UserPosts />
             </div>
         </div>
     );

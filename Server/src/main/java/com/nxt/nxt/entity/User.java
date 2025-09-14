@@ -11,6 +11,7 @@ public class User {
     private String role; // 'student' or 'admin'
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private UUID studentId;
 
     // Constructors
     public User() {
@@ -22,6 +23,7 @@ public class User {
         this.id = id;
         this.username = username;
         this.password = password;
+        this.studentId = null;
         this.email = email;
         this.role = role != null ? role : "student";
         this.createdAt = LocalDateTime.now();
@@ -83,6 +85,14 @@ public class User {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public UUID getStudentId() {
+        return studentId;
+    }
+
+    public void setStudentId(UUID studentId) {
+        this.studentId = studentId;
     }
 
     // Helper methods
