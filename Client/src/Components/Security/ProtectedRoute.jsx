@@ -16,6 +16,10 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
     }
 
     if (!isLoggedIn) {
+        // If an admin area is required, redirect to admin signin
+        if (requiredRole === 'admin') {
+            return <Navigate to="/admin/signin" replace />;
+        }
         return <Navigate to="/signup" replace />;
     }
 

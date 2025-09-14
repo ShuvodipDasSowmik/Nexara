@@ -20,8 +20,33 @@ import Footer from './Components/SiteChrome/Footer'
 import Posts from './Pages/Community/Posts'
 import AdminAuth from './Pages/Admin/AdminAuth'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
+import { useEffect } from 'react'
+import API from './API/axios'
 
 function App() {
+  useEffect(() => {
+    const trackVisitor = async () => {
+      try {
+        let visitorID = localStorage.getItem('visitorID');
+        if (!visitorID) {
+          visitorID = 'visitor-' + Math.random().toString(36).slice(2, 18) + Date.now();
+          localStorage.setItem('visitorID', visitorID);
+        }
+
+        // Fire-and-forget tracking call
+        try {
+          await API.post('/admin/track-activity', { visitorID });
+        } catch (err) {
+          // ignore tracking failures
+          console.debug('track-activity failed', err?.response?.status || err.message);
+        }
+      }
+      catch (err) {
+        console.error('Failed to track user activity:', err);
+      }
+    };
+    trackVisitor();
+  }, []);
   return (
     <>
       <AuthProvider>
@@ -41,7 +66,12 @@ function App() {
               <Route path="/signin" element={<SignUp />} />
               <Route path="/admin/signin" element={<AdminAuth />} />
               <Route path="/admin/signup" element={<AdminAuth />} />
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/admin/dashboard" element={
+                <ProtectedRoute requiredRole="admin">
+                  <Header />
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } />
               <Route path="/community/posts" element={
                 <>
                   <Header />

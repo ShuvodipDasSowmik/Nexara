@@ -25,10 +25,16 @@ import com.nxt.nxt.entity.User;
 import com.nxt.nxt.repositories.UserRepository;
 import com.nxt.nxt.security.JWTUtil;
 import com.nxt.nxt.service.AdminService;
+import com.nxt.nxt.dto.TrackActivityRequest;
+import com.nxt.nxt.entity.UserActivity;
+import com.nxt.nxt.repositories.UserActivityRepository;
 
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -36,12 +42,72 @@ public class AdminController {
 
     private final AdminService adminService;
     private final UserRepository userRepository;
+    private final UserActivityRepository activityRepository;
     private final JWTUtil jwtUtil;
+    private final JavaMailSender mailSender;
+    private final String fromAddress;
 
-    public AdminController(AdminService adminService, UserRepository userRepository, JWTUtil jwtUtil) {
+    public AdminController(AdminService adminService, UserRepository userRepository, UserActivityRepository activityRepository, JWTUtil jwtUtil, JavaMailSender mailSender, @Value("${app.email.from:noreply@localhost}") String fromAddress) {
         this.adminService = adminService;
         this.userRepository = userRepository;
+        this.activityRepository = activityRepository;
         this.jwtUtil = jwtUtil;
+        this.mailSender = mailSender;
+        this.fromAddress = fromAddress;
+    }
+
+    @PostMapping("/track-activity")
+    public ResponseEntity<?> trackActivity(@RequestBody TrackActivityRequest req, HttpServletRequest request) {
+        try {
+            String ip = request.getRemoteAddr();
+            String visitorId = req.getVisitorID();
+            String ua = request.getHeader("User-Agent");
+
+            // Minimal parsing - store raw UA, browser and device unknown for now
+            UserActivity a = new UserActivity();
+            a.setVisitorId(visitorId);
+            a.setIpAddress(ip);
+            a.setUserAgent(ua != null ? ua : "Unknown");
+            a.setBrowser("Unknown");
+            a.setOs("Unknown");
+            a.setDevice("Unknown");
+            a.setCountry("Unknown");
+            a.setCity("Unknown");
+            a.setRegionName("Unknown");
+            a.setZip("Unknown");
+
+            try { activityRepository.save(a); } catch (Exception ex) { System.err.println("Failed saving activity: " + ex.getMessage()); }
+
+            return ResponseEntity.ok(Map.of("success", true));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("success", false, "message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/analytics")
+    public ResponseEntity<?> getAnalytics(HttpServletRequest request) {
+        try {
+            if (!isAdminAuthenticated(request)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "success", false,
+                    "message", "Admin access required"
+                ));
+            }
+
+            Map<String, Integer> countryCounts = activityRepository.countByCountry();
+            Map<String, Integer> deviceCounts = activityRepository.countByDevice();
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "countryCounts", countryCounts,
+                "deviceCounts", deviceCounts
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "success", false,
+                "message", "Error fetching analytics"
+            ));
+        }
     }
 
     private void setCookie(HttpServletResponse response, String name, String value, int maxAge) {
@@ -234,6 +300,61 @@ public class AdminController {
                 "success", false,
                 "message", e.getMessage()
             ));
+        }
+    }
+
+    @PostMapping("/send-email")
+    public ResponseEntity<?> sendEmailToUsers(@RequestBody Map<String, Object> payload, HttpServletRequest request) {
+        try {
+            if (!isAdminAuthenticated(request)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("success", false, "message", "Admin access required"));
+            }
+
+            Object usersObj = payload.get("users");
+            String subject = (String) payload.getOrDefault("subject", "");
+            String message = (String) payload.getOrDefault("message", "");
+
+            if (!(usersObj instanceof List)) {
+                return ResponseEntity.badRequest().body(Map.of("success", false, "message", "Invalid users payload"));
+            }
+
+            List<?> usersList = (List<?>) usersObj;
+            int sent = 0;
+            List<String> errors = new java.util.ArrayList<>();
+
+            for (Object o : usersList) {
+                try {
+                    if (!(o instanceof Map)) continue;
+                    Map<?,?> u = (Map<?,?>) o;
+                    Object emailObj = u.get("email");
+                    Object usernameObj = u.get("username");
+                    if (emailObj == null) continue;
+                    String toEmail = String.valueOf(emailObj);
+                    String username = usernameObj != null ? String.valueOf(usernameObj) : "User";
+
+                    SimpleMailMessage mail = new SimpleMailMessage();
+                    mail.setTo(toEmail);
+                    mail.setFrom(fromAddress != null && !fromAddress.isBlank() ? fromAddress : "noreply@localhost");
+                    mail.setSubject(subject != null ? subject : "");
+                    mail.setText(String.format("Dear %s,\n\n%s\n\nRegards,\nNexara Admin", username, message != null ? message : ""));
+
+                    mailSender.send(mail);
+                    sent++;
+                } catch (Exception e) {
+                    errors.add(e.getMessage());
+                }
+            }
+
+            Map<String,Object> resp = new HashMap<>();
+            resp.put("success", true);
+            resp.put("message", String.format("%d emails sent", sent));
+            resp.put("sent", sent);
+            resp.put("errors", errors);
+
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            System.err.println("Error sending emails: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("success", false, "message", "Failed to send emails"));
         }
     }
 
