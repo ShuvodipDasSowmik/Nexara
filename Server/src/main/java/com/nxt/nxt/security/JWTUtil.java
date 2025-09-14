@@ -65,4 +65,24 @@ public class JWTUtil {
                 .getSubject();
     }
 
+    // Refresh-token helpers: validate and extract using the refresh token secret
+    public boolean isValidRefreshToken(String token, String username) {
+        return Jwts.parserBuilder()
+                .setSigningKey(REFRESH_TOKEN_SECRET)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .getSubject()
+                .equals(username);
+    }
+
+    public String extractUsernameFromRefreshToken(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(REFRESH_TOKEN_SECRET)
+                .build()
+                .parseClaimsJws(token)
+                .getBody()
+                .getSubject();
+    }
+
 }

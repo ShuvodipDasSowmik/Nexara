@@ -197,6 +197,12 @@
 			<version>5.5.13.3</version>
 		</dependency>
 
+		<!-- JavaMail (Spring Boot starter) for sending emails -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 	</dependencies>
 
 	<build>

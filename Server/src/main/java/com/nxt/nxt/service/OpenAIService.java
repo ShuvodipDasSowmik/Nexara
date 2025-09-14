@@ -43,7 +43,7 @@ public class OpenAIService {
                 "Always respond in a friendly and encouraging manner." + 
                 "Never make up answers or stories. If you don't know something, just say you don't know." +
                 "Focus on providing clear, step-by-step explanations suitable for high school students." + 
-                "If you are unsure about an answer, admit it and suggest ways to find out more." + 
+                "If you are unsure about an answer, admit it and suggest ways to find out more. But if it's provided in the system prompt, you can use it." + 
                 "Never provide medical, legal, or personal advice.");
         }
 

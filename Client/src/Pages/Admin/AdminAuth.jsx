@@ -5,7 +5,7 @@ import API from '../../API/axios';
 
 export default function AdminAuth() {
     const navigate = useNavigate();
-    const { signin } = useAuth();
+    const { signin, setUser } = useAuth();
     const [mode, setMode] = useState('signin'); // 'signin' or 'signup'
     const [submitting, setSubmitting] = useState(false);
     const [formData, setFormData] = useState({
@@ -43,11 +43,10 @@ export default function AdminAuth() {
                 });
 
                 setSuccess('Admin signed in successfully!');
-                // Use the existing signin method to update context
-                await signin({
-                    username: formData.username,
-                    password: formData.password
-                });
+                // Set user in auth context from admin signin response
+                if (response?.data?.user) {
+                    setUser(response.data.user);
+                }
                 setTimeout(() => {
                     navigate('/admin/dashboard');
                 }, 1000);

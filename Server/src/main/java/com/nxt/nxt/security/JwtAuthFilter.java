@@ -35,7 +35,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         "/api/auth/**",
         "/api/admin/signup",
         "/api/admin/signin", 
-        "/api/tools/summarize-youtube-transcript" // only this tools endpoint is public
+        "/api/tools/summarize-youtube-transcript",
+        "/api/admin/track-activity",
     };
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
