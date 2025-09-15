@@ -8,6 +8,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,15 +26,16 @@ import com.nxt.nxt.entity.PdfData;
 import com.nxt.nxt.entity.Post;
 import com.nxt.nxt.entity.Student;
 import com.nxt.nxt.repositories.ChatHistoryRepository;
+import com.nxt.nxt.repositories.CommentRepository;
+import com.nxt.nxt.repositories.ExamRepository;
 import com.nxt.nxt.repositories.PDFDataRepository;
 import com.nxt.nxt.repositories.PostRepository;
 import com.nxt.nxt.repositories.PostVoteRepository;
-import com.nxt.nxt.repositories.CommentRepository;
 import com.nxt.nxt.repositories.StudentBestScoreRepository;
 import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.util.EmbeddingAPI;
-import com.nxt.nxt.util.VectorDB;
 import com.nxt.nxt.util.PostRankScorer;
+import com.nxt.nxt.util.VectorDB;
 
 
 @RestController
@@ -42,6 +45,7 @@ public class UserController {
     private final StudentRepository studentRepo;
     private final PDFDataRepository pdfDataRepo;
     private final StudentBestScoreRepository studentBestScoreRepo;
+    private final ExamRepository examRepo;
     // private final ChatHistoryRepository chatHistoryRepo; // For future use
     private final PostRepository postRepo;
     private final PostVoteRepository postVoteRepo;
@@ -54,11 +58,13 @@ public class UserController {
     private VectorDB vectorDB;
 
     public UserController(StudentRepository studentRepo, PDFDataRepository pdfDataRepo, 
-                         StudentBestScoreRepository studentBestScoreRepo, ChatHistoryRepository chatHistoryRepo,
+                         StudentBestScoreRepository studentBestScoreRepo, ExamRepository examRepo,
+                         ChatHistoryRepository chatHistoryRepo,
                          PostRepository postRepo, PostVoteRepository postVoteRepo, CommentRepository commentRepo) {
         this.studentRepo = studentRepo;
         this.pdfDataRepo = pdfDataRepo;
         this.studentBestScoreRepo = studentBestScoreRepo;
+        this.examRepo = examRepo;
         // this.chatHistoryRepo = chatHistoryRepo; // For future use
         this.postRepo = postRepo;
         this.postVoteRepo = postVoteRepo;
@@ -307,6 +313,39 @@ public class UserController {
         return ResponseEntity.ok(result);
     }
 
+    // New endpoint to get all user exams
+    @GetMapping("/exams")
+    public ResponseEntity<List<UserExamDTO>> getAllUserExams() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        Student student = studentRepo.findByUsername(username).orElse(null);
+
+        if (student == null) return ResponseEntity.ok(Collections.emptyList());
+
+        List<com.nxt.nxt.entity.StudentBestScore> scores = studentBestScoreRepo.findAllByStudentIdOrderByCreatedAtDesc(student.getId());
+
+        // Get all exam IDs to fetch in one query
+        Set<Integer> examIds = scores.stream()
+            .map(com.nxt.nxt.entity.StudentBestScore::getExamId)
+            .collect(Collectors.toSet());
+        
+        // Fetch all exams in one query to avoid N+1 problem
+        Map<Integer, com.nxt.nxt.entity.Exam> examMap = examRepo.findAllById(examIds)
+            .stream()
+            .collect(Collectors.toMap(com.nxt.nxt.entity.Exam::getId, exam -> exam));
+
+        List<UserExamDTO> result = scores.stream()
+            .map(s -> {
+                com.nxt.nxt.entity.Exam exam = examMap.get(s.getExamId());
+                String title = exam != null ? exam.getTitle() : "Unknown Exam";
+                String description = exam != null ? exam.getDescription() : "";
+                return new UserExamDTO(s.getExamId(), title, description, s.getBestPercentage(), s.getCreatedAt());
+            })
+            .collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardResponse> getDashboardData() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -351,6 +390,29 @@ public class UserController {
         DashboardResponse response = new DashboardResponse(dashboardStudent, pdfDataList);
 
         return ResponseEntity.ok(response);
+    }
+
+    // DTO for user exam information
+    public static class UserExamDTO {
+        private final Integer examId;
+        private final String title;
+        private final String description;
+        private final BigDecimal percentage;
+        private final LocalDateTime date;
+
+        public UserExamDTO(Integer examId, String title, String description, BigDecimal percentage, LocalDateTime date) {
+            this.examId = examId;
+            this.title = title;
+            this.description = description;
+            this.percentage = percentage;
+            this.date = date;
+        }
+
+        public Integer getExamId() { return examId; }
+        public String getTitle() { return title; }
+        public String getDescription() { return description; }
+        public BigDecimal getPercentage() { return percentage; }
+        public LocalDateTime getDate() { return date; }
     }
 
 }

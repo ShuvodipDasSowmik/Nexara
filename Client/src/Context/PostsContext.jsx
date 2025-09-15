@@ -20,6 +20,8 @@ export const PostsProvider = ({ children }) => {
     const [voteCounts, setVoteCounts] = useState({});
     const [commentCounts, setCommentCounts] = useState({});
     const [userVotes, setUserVotes] = useState({});
+    const [personalizationStatus, setPersonalizationStatus] = useState('enabled'); // 'enabled', 'disabled'
+    const [personalizationReason, setPersonalizationReason] = useState(null);
     
     const { user } = useAuth();
 
@@ -40,6 +42,19 @@ export const PostsProvider = ({ children }) => {
             console.log('Fetching posts from context...');
             const response = await API.get('/posts');
             console.log('Posts response:', response);
+            
+            // Check for personalization status headers
+            const personalizationStatusHeader = response.headers['x-personalization-status'];
+            const personalizationReasonHeader = response.headers['x-personalization-reason'];
+            
+            if (personalizationStatusHeader === 'disabled') {
+                setPersonalizationStatus('disabled');
+                setPersonalizationReason(personalizationReasonHeader || 'Unknown reason');
+                console.log('Personalization disabled:', personalizationReasonHeader);
+            } else {
+                setPersonalizationStatus('enabled');
+                setPersonalizationReason(null);
+            }
             
             const fetchedPosts = response.data;
             setPosts(fetchedPosts);
@@ -220,6 +235,8 @@ export const PostsProvider = ({ children }) => {
         voteCounts,
         commentCounts,
         userVotes,
+        personalizationStatus,
+        personalizationReason,
         fetchPosts,
         addPost,
         updatePost,

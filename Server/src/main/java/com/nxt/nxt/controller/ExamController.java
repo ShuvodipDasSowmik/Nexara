@@ -15,15 +15,18 @@ import com.nxt.nxt.dto.ExamGenerationRequest;
 import com.nxt.nxt.dto.ExamSummaryDTO;
 import com.nxt.nxt.dto.QuestionDTO;
 import com.nxt.nxt.dto.SubmitAnswerDTO;
+import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.service.ExamService;
 
 @RestController
 @RequestMapping("/api/exam")
 public class ExamController {
     private final ExamService examService;
+    private final StudentRepository studentRepository;
 
-    public ExamController(ExamService examService) {
+    public ExamController(ExamService examService, StudentRepository studentRepository) {
         this.examService = examService;
+        this.studentRepository = studentRepository;
     }
 
     @PostMapping("/generate")
@@ -48,12 +51,22 @@ public class ExamController {
         @PathVariable Integer examId,
         @RequestBody List<SubmitAnswerDTO> answers
     ) {
-        // Find the exam to get the studentId
+        // Get current authenticated user
+        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        com.nxt.nxt.entity.Student student = studentRepository.findByUsername(username).orElse(null);
+        
+        if (student == null) {
+            return ResponseEntity.status(401).body("User not found");
+        }
+        
+        // Find the exam
         com.nxt.nxt.entity.Exam exam = examService.getExamById(examId);
         if (exam == null) {
             return ResponseEntity.badRequest().body("Exam not found");
         }
-        java.util.UUID studentId = exam.getStudentId();
+        
+        java.util.UUID studentId = student.getId();
         EvaluationResultDTO result = examService.evaluateExam(examId, answers, studentId);
         if (result == null) {
             return ResponseEntity.status(403).body("You have already taken this exam. You cannot retake it.");
@@ -64,12 +77,21 @@ public class ExamController {
     @GetMapping("/{examId}/summary")
     public ResponseEntity<?> getExamSummary(@PathVariable Integer examId) {
         try {
+            // Get current authenticated user
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            String username = auth.getName();
+            com.nxt.nxt.entity.Student student = studentRepository.findByUsername(username).orElse(null);
+            
+            if (student == null) {
+                return ResponseEntity.status(401).body("User not found");
+            }
+            
             com.nxt.nxt.entity.Exam exam = examService.getExamById(examId);
             if (exam == null) {
                 return ResponseEntity.badRequest().body("Exam not found");
             }
             
-            java.util.UUID studentId = exam.getStudentId();
+            java.util.UUID studentId = student.getId();
             ExamSummaryDTO summary = examService.getExamSummary(examId, studentId);
             if (summary == null) {
                 return ResponseEntity.badRequest().body("No summary available. Exam may not have been completed yet.");
@@ -109,6 +131,8 @@ public class ExamController {
         private String topic;
         private String essay;
         private String criteria;
+        private String studentId; // Add student ID
+        private Integer questionId; // Add question ID for database storage
         
         public String getTopic() { return topic; }
         public void setTopic(String topic) { this.topic = topic; }
@@ -118,6 +142,12 @@ public class ExamController {
         
         public String getCriteria() { return criteria; }
         public void setCriteria(String criteria) { this.criteria = criteria; }
+        
+        public String getStudentId() { return studentId; }
+        public void setStudentId(String studentId) { this.studentId = studentId; }
+        
+        public Integer getQuestionId() { return questionId; }
+        public void setQuestionId(Integer questionId) { this.questionId = questionId; }
     }
     
     // Response DTO for essay evaluation

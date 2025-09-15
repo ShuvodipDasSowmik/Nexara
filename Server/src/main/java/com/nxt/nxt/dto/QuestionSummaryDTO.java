@@ -11,6 +11,8 @@ public class QuestionSummaryDTO {
     private String userAnswer;
     private Boolean isCorrect;
     private String questionType;
+    private Integer questionScore; // Individual question score (especially useful for subjective questions)
+    private String questionGrade; // Letter grade for this question (A, B, C, D, F)
 
     public QuestionSummaryDTO() {}
 
@@ -73,4 +75,10 @@ public class QuestionSummaryDTO {
 
     public String getQuestionType() { return questionType; }
     public void setQuestionType(String questionType) { this.questionType = questionType; }
+
+    public Integer getQuestionScore() { return questionScore; }
+    public void setQuestionScore(Integer questionScore) { this.questionScore = questionScore; }
+    
+    public String getQuestionGrade() { return questionGrade; }
+    public void setQuestionGrade(String questionGrade) { this.questionGrade = questionGrade; }
 }

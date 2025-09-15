@@ -74,6 +74,21 @@ public class StudentRepository {
             return Optional.empty();
         }
     }
+
+    public Optional<Student> findByUserId(UUID userId) {
+        try {
+            return Optional.ofNullable(
+                jdbc.queryForObject(
+                    "SELECT * FROM students WHERE user_id = ?",
+                    new BeanPropertyRowMapper<>(Student.class),
+                    userId
+                )
+            );
+        }
+        catch (EmptyResultDataAccessException e) {
+            return Optional.empty();
+        }
+    }
 }
 
 

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,11 +21,13 @@ import com.nxt.nxt.entity.Exam;
 import com.nxt.nxt.entity.Question;
 import com.nxt.nxt.entity.Student;
 import com.nxt.nxt.entity.StudentAnswer;
+import com.nxt.nxt.entity.EssayEvaluation;
 import com.nxt.nxt.repositories.ExamRepository;
 import com.nxt.nxt.repositories.QuestionRepository;
 import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.repositories.StudentBestScoreRepository;
 import com.nxt.nxt.repositories.StudentAnswerRepository;
+import com.nxt.nxt.repositories.EssayEvaluationRepository;
 
 @Service
 public class ExamService {
@@ -34,20 +37,29 @@ public class ExamService {
     private final StudentRepository studentRepository;
     private final StudentBestScoreRepository studentBestScoreRepository;
     private final StudentAnswerRepository studentAnswerRepository;
+    private final EssayEvaluationRepository essayEvaluationRepository;
     private final ObjectMapper objectMapper;
+    
+    @Value("${ai.evaluation.enabled:false}")
+    private boolean aiEvaluationEnabled;
+    
+    @Value("${ai.evaluation.rate.limit.seconds:25}")
+    private int rateLimitSeconds;
 
     public ExamService(OpenAIService openAIService, 
                       ExamRepository examRepository, 
                       QuestionRepository questionRepository,
                       StudentRepository studentRepository,
                       StudentBestScoreRepository studentBestScoreRepository,
-                      StudentAnswerRepository studentAnswerRepository) {
+                      StudentAnswerRepository studentAnswerRepository,
+                      EssayEvaluationRepository essayEvaluationRepository) {
         this.openAIService = openAIService;
         this.examRepository = examRepository;
         this.questionRepository = questionRepository;
         this.studentRepository = studentRepository;
         this.studentBestScoreRepository = studentBestScoreRepository;
         this.studentAnswerRepository = studentAnswerRepository;
+        this.essayEvaluationRepository = essayEvaluationRepository;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -58,6 +70,11 @@ public class ExamService {
 
         // 2. Call AI service
         String aiResponseContent = openAIService.getExamGeneration(prompt);
+        
+        // Check if AI service returned an error
+        if (aiResponseContent != null && aiResponseContent.startsWith("ERROR:")) {
+            throw new RuntimeException("Exam generation failed: " + aiResponseContent.substring(7));
+        }
 
         // 3. Parse AI response into questions
         List<Question> questions = parseQuestionsFromString(aiResponseContent, request.getQuestionCount(), request.getExamType());
@@ -132,9 +149,10 @@ public class ExamService {
             questionById.put(q.getId(), q);
         }
 
-        List<EvaluationDetailDTO> details = new ArrayList<>();
-        int totalScore = 0;
-        int maxPossibleScore = 0;
+    List<EvaluationDetailDTO> details = new ArrayList<>();
+    int totalScore = 0;
+    // Use a fixed denominator: every question is scored out of 10
+    int maxPossibleScore = questions.size() * 10;
         
         for (SubmitAnswerDTO ans : answers) {
             Question q = questionById.get(ans.getQuestionId());
@@ -145,28 +163,223 @@ public class ExamService {
             String userAnswer = ans.getSelected() != null ? ans.getSelected() : "";
             
             if ("subjective".equals(q.getQuestionType())) {
-                // Evaluate subjective answer using AI
-                int subjectiveScore = evaluateSubjectiveAnswer(
-                    q.getQuestionText(), 
-                    userAnswer, 
-                    q.getSubjectiveAnswer()
-                );
+                // Check if this is an essay answer that contains a pre-evaluated score
+                String actualUserAnswer = userAnswer;
+                int subjectiveScore = -1; // -1 means not pre-evaluated
+                
+                // Handle legacy data format if present
+                if (userAnswer != null && userAnswer.startsWith("SUBJECTIVE:")) {
+                    // Extract original answer if it's in legacy format
+                    if (userAnswer.contains(" [Score:")) {
+                        actualUserAnswer = userAnswer.substring(0, userAnswer.indexOf(" [Score:"));
+                        actualUserAnswer = actualUserAnswer.replace("SUBJECTIVE:", "").trim();
+                        if (actualUserAnswer.contains("%")) {
+                            actualUserAnswer = actualUserAnswer.substring(actualUserAnswer.indexOf("%") + 1).trim();
+                        }
+                    } else {
+                        // If it's just "SUBJECTIVE:50.0%" without actual answer, we can't evaluate
+                        actualUserAnswer = "";
+                    }
+                }
+                
+                // Check if the answer already contains a pre-evaluated score from essay evaluation
+                if (userAnswer != null && userAnswer.contains("\"score\":")) {
+                    try {
+                        // Parse JSON structure to extract pre-evaluated scores
+                        // First check for scaledScore (preferred)
+                        String scaledScorePattern = "\"scaledScore\":\\s*(\\d+)";
+                        java.util.regex.Pattern scaledPattern = java.util.regex.Pattern.compile(scaledScorePattern);
+                        java.util.regex.Matcher scaledMatcher = scaledPattern.matcher(userAnswer);
+                        
+                        if (scaledMatcher.find()) {
+                            // Use the already-scaled score (0-10)
+                            subjectiveScore = Integer.parseInt(scaledMatcher.group(1));
+                            System.out.println("Using pre-calculated scaled score: " + subjectiveScore + "/10");
+                        } else {
+                            // Fallback to raw score and convert
+                            String scorePattern = "\"score\":\\s*(\\d+)";
+                            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(scorePattern);
+                            java.util.regex.Matcher matcher = pattern.matcher(userAnswer);
+                            if (matcher.find()) {
+                                int rawScore = Integer.parseInt(matcher.group(1));
+                                // Convert from 0-100 scale to 0-10 scale
+                                subjectiveScore = rawScore > 10 ? (int) Math.round(rawScore / 10.0) : rawScore;
+                                System.out.println("Using converted raw score: " + subjectiveScore + "/10 (raw: " + rawScore + ")");
+                            }
+                        }
+                        
+                        // Extract the actual essay text if it's in the JSON structure
+                        String essayPattern = "\"essay\":\\s*\"([^\"]+)\"";
+                        java.util.regex.Pattern essayPatternCompiled = java.util.regex.Pattern.compile(essayPattern);
+                        java.util.regex.Matcher essayMatcher = essayPatternCompiled.matcher(userAnswer);
+                        if (essayMatcher.find()) {
+                            actualUserAnswer = essayMatcher.group(1);
+                        }
+                        
+                        System.out.println("SCORE DEBUG: Question " + ans.getQuestionId() + 
+                                         " - Final score: " + subjectiveScore + "/10, Essay: '" + 
+                                         (actualUserAnswer.length() > 50 ? actualUserAnswer.substring(0, 50) + "..." : actualUserAnswer) + "'");
+                        
+                    } catch (Exception e) {
+                        System.out.println("Error parsing pre-evaluated score, will re-evaluate: " + e.getMessage());
+                        subjectiveScore = -1; // Fall back to re-evaluation
+                    }
+                }
+                
+                // If no pre-evaluated score found, check database for saved essay evaluation using smart matching
+                if (subjectiveScore == -1) {
+                    try {
+                        // First try exact match by student and question
+                        var exactMatch = essayEvaluationRepository.findByStudentIdAndQuestionId(studentId, ans.getQuestionId());
+                        if (exactMatch.isPresent()) {
+                            EssayEvaluation evaluation = exactMatch.get();
+                            Integer rawScore = evaluation.getScore();
+                            if (rawScore != null) {
+                                subjectiveScore = rawScore > 10 ? 
+                                                (int) Math.round(rawScore / 10.0) : 
+                                                rawScore;
+                                System.out.println("ESSAY DB: Found exact match with score " + subjectiveScore + 
+                                                 "/10 (raw: " + rawScore + ") for student " + studentId + 
+                                                 ", question " + ans.getQuestionId() + " [Method: " + evaluation.getEvaluationMethod() + "]");
+                            }
+                        } else {
+                            // Try smart matching by topic and essay content for placeholder entries
+                            List<EssayEvaluation> candidateEvaluations = essayEvaluationRepository.findAll();
+                            EssayEvaluation bestMatch = null;
+                            
+                            for (EssayEvaluation eval : candidateEvaluations) {
+                                // Check if this is a placeholder entry (temp student ID)
+                                if (eval.getStudentId().toString().equals("00000000-0000-0000-0000-000000000000")) {
+                                    // Match by topic similarity and essay content
+                                    String evalTopic = eval.getTopic();
+                                    String evalEssay = eval.getEssayText();
+                                    String questionTopic = q.getQuestionText();
+                                    
+                                    // Improved matching: check if topics are similar OR essay content matches
+                                    boolean topicMatches = false;
+                                    boolean contentMatches = false;
+                                    
+                                    if (evalTopic != null && questionTopic != null) {
+                                        // More flexible topic matching
+                                        String evalTopicLower = evalTopic.toLowerCase();
+                                        String questionTopicLower = questionTopic.toLowerCase();
+                                        topicMatches = evalTopicLower.contains(questionTopicLower.substring(0, Math.min(questionTopicLower.length(), 20))) ||
+                                                      questionTopicLower.contains(evalTopicLower.substring(0, Math.min(evalTopicLower.length(), 20)));
+                                    }
+                                    
+                                    if (evalEssay != null && actualUserAnswer != null) {
+                                        // Exact content match
+                                        contentMatches = evalEssay.trim().equals(actualUserAnswer.trim());
+                                    }
+                                    
+                                    if (topicMatches && contentMatches) {
+                                        bestMatch = eval;
+                                        break; // Found a good match
+                                    }
+                                }
+                            }
+                            
+                            if (bestMatch != null) {
+                                Integer rawScore = bestMatch.getScore();
+                                if (rawScore != null) {
+                                    subjectiveScore = rawScore > 10 ? 
+                                                    (int) Math.round(rawScore / 10.0) : 
+                                                    rawScore;
+                                    System.out.println("ESSAY DB: Found smart match with score " + subjectiveScore + 
+                                                     "/10 (raw: " + rawScore + ") for question " + ans.getQuestionId() + 
+                                                     " [Method: " + bestMatch.getEvaluationMethod() + "]");
+                                    
+                                    // Update the evaluation with correct student and question IDs
+                                    try {
+                                        bestMatch.setStudentId(studentId);
+                                        bestMatch.setQuestionId(ans.getQuestionId());
+                                        essayEvaluationRepository.save(bestMatch);
+                                        System.out.println("ESSAY DB: Updated evaluation with correct IDs");
+                                    } catch (Exception updateError) {
+                                        System.err.println("Error updating evaluation IDs: " + updateError.getMessage());
+                                    }
+                                }
+                            } else {
+                                System.out.println("ESSAY DB: No smart match found for question " + ans.getQuestionId() + 
+                                                 ". Looking for any recent evaluations...");
+                                
+                                // Fallback: look for the most recent evaluation by this student regardless of topic
+                                List<EssayEvaluation> recentEvaluations = essayEvaluationRepository.findAll()
+                                    .stream()
+                                    .filter(eval -> eval.getStudentId().toString().equals("00000000-0000-0000-0000-000000000000"))
+                                    .sorted((e1, e2) -> e2.getCreatedAt().compareTo(e1.getCreatedAt()))
+                                    .limit(5) // Check last 5 evaluations
+                                    .toList();
+                                
+                                for (EssayEvaluation eval : recentEvaluations) {
+                                    if (eval.getEssayText() != null && actualUserAnswer != null && 
+                                        eval.getEssayText().trim().equals(actualUserAnswer.trim())) {
+                                        Integer rawScore = eval.getScore();
+                                        if (rawScore != null) {
+                                            subjectiveScore = rawScore > 10 ? 
+                                                            (int) Math.round(rawScore / 10.0) : 
+                                                            rawScore;
+                                            System.out.println("ESSAY DB: Found fallback match with score " + subjectiveScore + 
+                                                             "/10 (raw: " + rawScore + ") for question " + ans.getQuestionId());
+                                            
+                                            // Update with correct IDs
+                                            eval.setStudentId(studentId);
+                                            eval.setQuestionId(ans.getQuestionId());
+                                            essayEvaluationRepository.save(eval);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Error retrieving essay evaluation from database: " + e.getMessage());
+                    }
+                }
+                
+                // If still no score found, fail the submission with proper error message
+                if (subjectiveScore == -1) {
+                    System.out.println("ESSAY DB: No saved evaluation found and AI evaluation unavailable for question " + ans.getQuestionId());
+                    throw new RuntimeException("Essay evaluation failed. Please evaluate your answers individually before submitting the complete exam, or try again later when AI evaluation is available.");
+                }
+                
                 totalScore += subjectiveScore;
-                maxPossibleScore += 10; // Subjective questions are scored out of 10
+                
+                System.out.println("SCORE DEBUG: Question " + ans.getQuestionId() + 
+                                 " scored " + subjectiveScore + "/10. Running total: " + totalScore + "/" + maxPossibleScore);
                 
                 // Consider it "correct" if score is 7 or above (for statistics)
                 isCorrect = subjectiveScore >= 7;
                 correctAnswer = String.valueOf(subjectiveScore) + "/10";
                 
+                // Safely format the answer with score and truncate if needed
+                String answerWithScore = actualUserAnswer + " [Score: " + subjectiveScore + "/10]";
+                String safeAnswer = safeTruncateText(answerWithScore, 250); // Leave some margin under 255
+                
                 StudentAnswer studentAnswer = new StudentAnswer(
                     studentId, examId, ans.getQuestionId(), 
-                    userAnswer + " [Score: " + subjectiveScore + "/10]", 
+                    safeAnswer, 
                     isCorrect
                 );
-                studentAnswerRepository.save(studentAnswer);
+                // Persist numeric per-question score (0-10)
+                studentAnswer.setQuestionScore(subjectiveScore);
+                
+                // Ensure the student answer is saved properly
+                try {
+                    StudentAnswer savedAnswer = studentAnswerRepository.save(studentAnswer);
+                    if (savedAnswer != null && savedAnswer.getId() != null) {
+                        System.out.println("SUBMISSION DB: Successfully saved student answer for question " + 
+                                         ans.getQuestionId() + " with score " + subjectiveScore + "/10");
+                    } else {
+                        System.err.println("SUBMISSION DB: Student answer save may have failed for question " + ans.getQuestionId());
+                    }
+                } catch (Exception e) {
+                    System.err.println("CRITICAL ERROR: Failed to save student answer for question " + ans.getQuestionId() + ": " + e.getMessage());
+                    throw new RuntimeException("Failed to save your answer. Please try submitting again.", e);
+                }
                 
             } else {
-                // Handle multiple choice questions
+                // Handle multiple choice questions - also use partial scoring for consistency
                 String correct = correctById.get(ans.getQuestionId());
                 String correctNorm = normalizeAnswer(correct);
                 String selectedNorm = normalizeAnswer(ans.getSelected());
@@ -181,8 +394,9 @@ public class ExamService {
                 }
                 
                 isCorrect = correctNorm != null && correctNorm.equals(selectedNorm);
-                if (isCorrect) totalScore += 10; // Multiple choice questions worth 10 points each
-                maxPossibleScore += 10;
+                // Multiple choice: 10 points if correct, 0 if wrong (same as subjective max)
+                int mcScore = isCorrect ? 10 : 0;
+                totalScore += mcScore;
                 correctAnswer = correctNorm;
                 userAnswer = selectedNorm;
                 
@@ -191,6 +405,8 @@ public class ExamService {
                     selectedNorm != null ? selectedNorm : ans.getSelected(), 
                     isCorrect
                 );
+                // Persist numeric per-question score for MCQ
+                studentAnswer.setQuestionScore(mcScore);
                 studentAnswerRepository.save(studentAnswer);
             }
             
@@ -203,8 +419,23 @@ public class ExamService {
         }
 
         double percentage = maxPossibleScore > 0 ? (totalScore * 100.0 / maxPossibleScore) : 0.0;
+        
+        // Store the scores in the StudentBestScore table with verification
         com.nxt.nxt.entity.StudentBestScore bestScore = new com.nxt.nxt.entity.StudentBestScore(studentId, examId, java.math.BigDecimal.valueOf(percentage));
-        studentBestScoreRepository.save(bestScore);
+        
+        try {
+            com.nxt.nxt.entity.StudentBestScore savedBestScore = studentBestScoreRepository.save(bestScore);
+            if (savedBestScore != null && savedBestScore.getId() != null) {
+                System.out.println("SUBMISSION DB: Successfully saved best score with percentage " + percentage + "% for student " + studentId + " on exam " + examId);
+            } else {
+                System.err.println("SUBMISSION DB: Best score save may have failed for student " + studentId + " on exam " + examId);
+            }
+        } catch (Exception e) {
+            System.err.println("CRITICAL ERROR: Failed to save best score for student " + studentId + " on exam " + examId + ": " + e.getMessage());
+            throw new RuntimeException("Failed to save your exam score. Please try submitting again.", e);
+        }
+
+        System.out.println("SUBMISSION DEBUG: Total score: " + totalScore + "/" + maxPossibleScore + " = " + percentage + "%");
 
         // For the result, calculate how many questions were "correct" (for display purposes)
         int correctCount = (int) details.stream().filter(EvaluationDetailDTO::isCorrect).count();
@@ -390,13 +621,12 @@ public class ExamService {
             } else {
                 System.err.println("AI response is not a valid JSON array");
                 System.err.println("Response content: " + aiResponseContent);
+                throw new RuntimeException("Exam generation failed due to invalid AI response format. Please try again later.");
             }
         } catch (Exception e) {
             System.err.println("Error parsing AI response: " + e.getMessage());
             System.err.println("AI response content: " + aiResponseContent);
-            e.printStackTrace();
-            System.err.println("Falling back to default questions");
-            questions = createFallbackQuestions(questionCount, questionType);
+            throw new RuntimeException("Exam generation failed due to AI service unavailable. Please try again later or contact support if the issue persists.", e);
         }
         return questions;
     }
@@ -413,140 +643,6 @@ public class ExamService {
         return content;
     }
 
-    private List<Question> createFallbackQuestions(int requestedCount) {
-        return createFallbackQuestions(requestedCount, "multiple_choice");
-    }
-    
-    private List<Question> createFallbackQuestions(int requestedCount, String questionType) {
-        List<Question> fallbackQuestions = new ArrayList<>();
-        
-        if ("subjective".equals(questionType)) {
-            // Subjective fallback questions
-            String[] subjectiveQuestions = {
-                "Explain the concept of object-oriented programming and its key principles.",
-                "Discuss the advantages and disadvantages of using inheritance in software design.",
-                "Analyze the role of polymorphism in creating flexible and maintainable code.",
-                "Describe the differences between abstract classes and interfaces, providing examples.",
-                "Explain the importance of encapsulation in software development.",
-                "Discuss the concept of design patterns and their benefits in software engineering.",
-                "Analyze the trade-offs between different data structures for specific use cases.",
-                "Explain the principles of SOLID design and their practical applications.",
-                "Describe the importance of unit testing in software development lifecycle.",
-                "Discuss the challenges and benefits of concurrent programming.",
-                "Explain the concept of software architecture and its impact on system design.",
-                "Analyze the role of algorithms in problem-solving and computational efficiency.",
-                "Describe the importance of code documentation and maintainability.",
-                "Discuss the evolution of programming languages and their paradigms.",
-                "Explain the concept of software versioning and its best practices.",
-                "Analyze the impact of cloud computing on modern software development.",
-                "Describe the principles of database design and normalization.",
-                "Discuss the importance of security considerations in software development.",
-                "Explain the concept of software testing methodologies and their applications.",
-                "Analyze the role of continuous integration and deployment in modern development."
-            };
-            
-            String[] subjectiveAnswers = {
-                "A comprehensive answer should cover the four main principles: encapsulation, inheritance, polymorphism, and abstraction, with examples and benefits.",
-                "Discussion should include code reusability benefits, complexity issues, tight coupling problems, and alternatives like composition.",
-                "Answer should explain runtime polymorphism, method overriding, interface implementation, and how it enables flexible design patterns.",
-                "Comparison should cover constructors, multiple inheritance, default methods, and practical use cases for each approach.",
-                "Explanation should include data hiding, access modifiers, getter/setter methods, and benefits for maintainability and security.",
-                "Answer should cover common patterns like Singleton, Factory, Observer, and their benefits in solving recurring design problems.",
-                "Analysis should compare arrays, linked lists, trees, hash tables, and their time/space complexity for different operations.",
-                "Discussion should cover Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, and Dependency Inversion principles.",
-                "Answer should explain test-driven development, test coverage, automated testing, and benefits for code quality and maintenance.",
-                "Discussion should cover threading, synchronization, deadlocks, race conditions, and modern concurrent programming models.",
-                "Explanation should cover architectural patterns, scalability, maintainability, and the role of architecture in system design.",
-                "Analysis should cover algorithm complexity, optimization techniques, and the importance of choosing appropriate algorithms.",
-                "Answer should discuss code comments, documentation tools, naming conventions, and their impact on team collaboration.",
-                "Discussion should cover procedural, object-oriented, functional paradigms, and how languages have evolved to meet different needs.",
-                "Explanation should cover semantic versioning, branching strategies, release management, and compatibility considerations.",
-                "Analysis should cover scalability, distributed systems, microservices, and how cloud platforms change development practices.",
-                "Answer should cover entity-relationship modeling, normalization forms, indexing, and database optimization techniques.",
-                "Discussion should cover secure coding practices, authentication, authorization, encryption, and common security vulnerabilities.",
-                "Explanation should cover unit testing, integration testing, system testing, and agile testing methodologies.",
-                "Analysis should cover automation benefits, deployment pipelines, version control integration, and DevOps practices."
-            };
-            
-            int questionsToGenerate = Math.min(requestedCount, subjectiveQuestions.length);
-            for (int i = 0; i < questionsToGenerate; i++) {
-                Question question = new Question();
-                question.setQuestionText(subjectiveQuestions[i]);
-                question.setQuestionType("subjective");
-                question.setSubjectiveAnswer(subjectiveAnswers[i]);
-                question.setOptionA("");
-                question.setOptionB("");
-                question.setOptionC("");
-                question.setOptionD("");
-                question.setCorrectAnswer("S");
-                fallbackQuestions.add(question);
-            }
-        } else {
-            // Multiple choice fallback questions (existing logic)
-            String[] questionTexts = {
-                "What is the primary benefit of object-oriented programming?",
-                "Which keyword is used to inherit a class in Java?",
-                "What does polymorphism allow in Java?",
-                "What is the difference between abstract class and interface?",
-                "Which design principle promotes loose coupling?",
-                "What is the purpose of the 'final' keyword in Java?",
-                "Which collection type maintains insertion order?",
-                "What is the main advantage of using generics?",
-                "Which keyword is used for exception handling?",
-                "What is the purpose of the 'static' keyword?",
-                "Which principle suggests a class should have only one reason to change?",
-                "What is the difference between overloading and overriding?",
-                "Which data structure follows Last In First Out principle?",
-                "What is the purpose of garbage collection?",
-                "Which keyword prevents method overriding?",
-                "What is the main benefit of using interfaces?",
-                "Which loop is guaranteed to execute at least once?",
-                "What is the difference between == and equals() method?",
-                "Which keyword is used to create a constant in Java?",
-                "What is the purpose of the 'this' keyword?"
-            };
-            
-            String[][] options = {
-                {"Code reusability", "Faster execution", "Smaller file size", "Better graphics"},
-                {"implements", "extends", "inherits", "super"},
-                {"Multiple inheritance", "Method overloading", "Dynamic method binding", "All of the above"},
-                {"Abstract class can have constructors", "Interface can have method implementation", "Both are same", "Abstract class is faster"},
-                {"Dependency Injection", "Singleton Pattern", "Factory Pattern", "Observer Pattern"},
-                {"Makes variable constant", "Prevents inheritance", "Prevents overriding", "All of the above"},
-                {"LinkedList", "ArrayList", "HashSet", "TreeSet"},
-                {"Type safety", "Performance", "Code reusability", "All of the above"},
-                {"try", "catch", "throw", "All of the above"},
-                {"Creates instance variables", "Belongs to class not instance", "Used for inheritance", "None of the above"},
-                {"Single Responsibility", "Open/Closed", "Liskov Substitution", "Interface Segregation"},
-                {"Same method name different parameters vs same signature different implementation", "Both are same", "Overloading is faster", "Overriding is compile time"},
-                {"Stack", "Queue", "LinkedList", "ArrayList"},
-                {"Automatic memory management", "Faster execution", "Better security", "Code optimization"},
-                {"final", "static", "private", "protected"},
-                {"Multiple inheritance", "Loose coupling", "Code contracts", "All of the above"},
-                {"for", "while", "do-while", "foreach"},
-                {"== compares references, equals() compares values", "Both are same", "== is faster", "equals() compares references"},
-                {"final", "static", "const", "immutable"},
-                {"Reference to current object", "Reference to parent class", "Reference to static members", "None of the above"}
-            };
-            
-            String[] correctAnswers = {"A", "B", "D", "A", "A", "D", "A", "D", "D", "B", "A", "A", "A", "A", "A", "D", "C", "A", "A", "A"};
-            
-            // Generate the requested number of questions
-            int questionsToGenerate = Math.min(requestedCount, questionTexts.length);
-            for (int i = 0; i < questionsToGenerate; i++) {
-                Question question = new Question();
-                question.setQuestionText(questionTexts[i]);
-                question.setOptions(String.join(",", options[i]));
-                question.setCorrectAnswer(correctAnswers[i]);
-                question.setQuestionType("multiple_choice");
-                fallbackQuestions.add(question);
-            }
-        }
-        
-        System.out.println("Generated " + fallbackQuestions.size() + " fallback " + questionType + " questions (requested: " + requestedCount + ")");
-        return fallbackQuestions;
-    }
-    
     private UUID getOrCreateTestStudent() {
         UUID testStudentId = UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
         
@@ -597,6 +693,63 @@ public class ExamService {
         return examRepository.findById(examId).orElse(null);
     }
 
+    private static long lastApiCall = 0;
+    
+    /**
+     * Evaluate subjective answer with rate limiting to prevent API quota issues
+     */
+    private int evaluateSubjectiveAnswerWithRateLimit(String question, String studentAnswer, String expectedAnswer) {
+        // If AI evaluation is disabled, throw an error instead of using local evaluation
+        if (!aiEvaluationEnabled) {
+            System.out.println("AI evaluation disabled");
+            throw new RuntimeException("AI evaluation is currently disabled. Please try again later.");
+        }
+        
+        // For very short answers, throw an error to encourage proper answers
+        if (studentAnswer == null || studentAnswer.trim().length() < 30) {
+            throw new RuntimeException("Please provide a more detailed answer (at least 30 characters) for proper evaluation.");
+        }
+        
+        // Calculate rate limit interval in milliseconds
+        long rateLimitInterval = rateLimitSeconds * 1000L;
+        
+        // Check if we need to wait to avoid rate limiting
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastCall = currentTime - lastApiCall;
+        
+        if (timeSinceLastCall < rateLimitInterval) {
+            long waitTime = rateLimitInterval - timeSinceLastCall;
+            System.out.println("Rate limiting: would need to wait " + waitTime + "ms before next API call");
+            throw new RuntimeException("AI evaluation is temporarily rate limited. Please wait a moment and try again, or evaluate your answers individually first.");
+        }
+        
+        // Try AI evaluation, but fail on error instead of falling back
+        lastApiCall = System.currentTimeMillis();
+        try {
+            // Call OpenAI API directly here with better error handling
+            String prompt = String.format(
+                "Score this answer on a scale of 0-10.\n\nQuestion: %s\n\nExpected Answer: %s\n\nStudent Answer: %s\n\nProvide only the numeric score (0-10):",
+                question, expectedAnswer, studentAnswer
+            );
+            
+            String response = openAIService.getChatCompletion(prompt);
+            int score = parseScoreFromResponse(response);
+            
+            if (score >= 0 && score <= 10) {
+                return score;
+            } else {
+                throw new RuntimeException("AI evaluation returned an invalid score. Please try again.");
+            }
+        } catch (Exception e) {
+            System.out.println("OpenAIService error: " + e.getMessage());
+            if (e.getMessage().contains("Rate limit reached") || e.getMessage().contains("HTTP 429")) {
+                throw new RuntimeException("AI evaluation service is temporarily unavailable due to rate limits. Please evaluate your answers individually first, then submit.");
+            } else {
+                throw new RuntimeException("AI evaluation failed due to a technical issue. Please try again later.");
+            }
+        }
+    }
+
     private int evaluateSubjectiveAnswer(String question, String studentAnswer, String expectedAnswer) {
         try {
             String prompt = String.format("""
@@ -637,11 +790,46 @@ public class ExamService {
                 return Math.max(0, Math.min(10, (int) Math.round(score)));
             } catch (NumberFormatException e) {
                 System.err.println("Could not parse AI evaluation score: " + response);
-                return 5; // Default middle score if parsing fails
+                return evaluateAnswerBasedOnLength(studentAnswer); // Use length-based scoring instead of fixed 5
             }
         } catch (Exception e) {
             System.err.println("Error during AI evaluation: " + e.getMessage());
-            return 5; // Default middle score on error
+            return evaluateAnswerBasedOnLength(studentAnswer); // Use length-based scoring instead of fixed 5
+        }
+    }
+    
+    /**
+     * Evaluate answer based on length and basic content analysis when AI is not available
+     */
+    private int evaluateAnswerBasedOnLength(String answer) {
+        if (answer == null || answer.trim().isEmpty()) {
+            return 0; // No answer
+        }
+        
+        String trimmed = answer.trim();
+        int length = trimmed.length();
+        int wordCount = trimmed.split("\\s+").length;
+        
+        // More generous scoring for subjective answers
+        // Very short answers (likely incomplete)
+        if (length < 20 || wordCount < 5) {
+            return 3; // Give some credit for attempting
+        }
+        // Short but potentially valid answers
+        else if (length < 50 || wordCount < 15) {
+            return 5; // Half credit
+        }
+        // Medium length answers (likely reasonable effort)
+        else if (length < 150 || wordCount < 50) {
+            return 7; // Good effort
+        }
+        // Longer answers (good effort)
+        else if (length < 300 || wordCount < 100) {
+            return 8; // Very good
+        }
+        // Very comprehensive answers
+        else {
+            return 9; // Excellent effort (reserve 10 for perfect AI scores)
         }
     }
 
@@ -672,15 +860,42 @@ public class ExamService {
 
         // Build question summaries
         List<QuestionSummaryDTO> questionSummaries = new ArrayList<>();
-        int correctCount = 0;
+        int totalScore = 0; // Track actual total score for subjective exams
         
         for (Question question : questions) {
             StudentAnswer studentAnswer = answerMap.get(question.getId());
             String userAnswer = studentAnswer != null ? studentAnswer.getSelectedAnswer() : null;
             Boolean isCorrect = studentAnswer != null ? studentAnswer.getIsCorrect() : Boolean.FALSE;
             
-            if (isCorrect) {
-                correctCount++;
+            // Clean up user answer for display (remove score information for subjective questions)
+            String displayAnswer = userAnswer;
+            int questionScore = 0; // Track individual question score
+
+            // Use stored numeric score if present (authoritative)
+            if (studentAnswer != null && studentAnswer.getQuestionScore() != null) {
+                questionScore = studentAnswer.getQuestionScore();
+            } else {
+                // Fallback: for legacy rows, treat isCorrect as 10/0
+                questionScore = isCorrect ? 10 : 0;
+            }
+            totalScore += questionScore;
+
+            // Clean display answer (remove any embedded score text) but do not parse it for scoring
+            if (displayAnswer != null && displayAnswer.contains("[Score: ")) {
+                displayAnswer = displayAnswer.substring(0, displayAnswer.indexOf(" [Score: ")).trim();
+            }
+            if (displayAnswer != null && displayAnswer.startsWith("SUBJECTIVE:")) {
+                displayAnswer = displayAnswer.replace("SUBJECTIVE:", "").trim();
+                if (displayAnswer.contains("%")) {
+                    displayAnswer = displayAnswer.substring(displayAnswer.indexOf("%") + 1).trim();
+                }
+            }
+            displayAnswer = cleanDisplayAnswer(displayAnswer);
+            
+            // For subjective questions, if display answer is empty or just artifacts, show the score instead
+            if ("subjective".equals(question.getQuestionType()) && 
+                (displayAnswer == null || displayAnswer.trim().isEmpty() || displayAnswer.equals("s"))) {
+                displayAnswer = "Score: " + questionScore + "/10";
             }
             
             QuestionSummaryDTO questionSummary = new QuestionSummaryDTO(
@@ -691,22 +906,42 @@ public class ExamService {
                 question.getOptionC(),
                 question.getOptionD(),
                 question.getCorrectAnswer(),
-                userAnswer,
+                displayAnswer, // Use cleaned answer instead of raw userAnswer
                 isCorrect,
                 question.getQuestionType()
             );
+            questionSummary.setQuestionScore(questionScore); // Set individual question score
+            questionSummary.setQuestionGrade(calculateGradeFromScore(questionScore)); // Set per-question grade
             questionSummaries.add(questionSummary);
         }
 
-        double percentage = !questions.isEmpty() ? (correctCount * 100.0 / questions.size()) : 0.0;
+        // Use the actual percentage from StudentBestScore - this is the authoritative value
+        // The percentage was calculated accurately during exam submission when AI scoring was performed
+        double percentage = bestScore.get().getBestPercentage().doubleValue();
+        
+        // For verification purposes only - don't change the percentage based on this
+        int maxScore = questions.size() * 10;
+        double calculatedPercentage = maxScore > 0 ? (totalScore * 100.0 / maxScore) : 0.0;
+        
+        System.out.println("SUMMARY DEBUG: Authoritative percentage: " + percentage + "%");
+        System.out.println("SUMMARY DEBUG: Recalculated from parsing: " + calculatedPercentage + "% (total: " + totalScore + "/" + maxScore + ")");
+        
+        // Log discrepancies for debugging but use stored percentage consistently
+        if (Math.abs(percentage - calculatedPercentage) > 1.0) {
+            System.out.println("INFO: Score parsing discrepancy detected in summary (this is expected for subjective exams):");
+            System.out.println("Authoritative percentage (from submission): " + percentage);
+            System.out.println("Recalculated percentage (from answer parsing): " + calculatedPercentage);
+            System.out.println("Using authoritative percentage: " + percentage);
+        }
 
         return new ExamSummaryDTO(
             examId,
             exam.getTitle(),
             exam.getDescription(),
             questions.size(),
-            correctCount,
+            (int) Math.round(percentage * questions.size() / 10.0), // Calculate total score from stored percentage for consistency
             percentage,
+            calculateGrade(percentage), // Add overall grade
             questionSummaries
         );
     }
@@ -714,16 +949,69 @@ public class ExamService {
     public com.nxt.nxt.controller.ExamController.EssayEvaluationResponse evaluateEssay(
             com.nxt.nxt.controller.ExamController.EssayEvaluationRequest request) {
         
-        String evaluationPrompt = createEssayEvaluationPrompt(
-            request.getTopic(), 
-            request.getEssay(), 
-            request.getCriteria()
-        );
-        
-        String aiResponse = openAIService.getExamGeneration(evaluationPrompt);
-        return parseEssayEvaluation(aiResponse);
+        try {
+            String evaluationPrompt = createEssayEvaluationPrompt(
+                request.getTopic(), 
+                request.getEssay(), 
+                request.getCriteria()
+            );
+            
+            String aiResponse = openAIService.getExamGeneration(evaluationPrompt);
+            
+            // Check for AI service error responses
+            if (aiResponse != null && aiResponse.startsWith("ERROR:")) {
+                throw new RuntimeException("AI evaluation service is currently unavailable. Please try again later or contact support.");
+            }
+            
+            com.nxt.nxt.controller.ExamController.EssayEvaluationResponse response = parseEssayEvaluation(aiResponse);
+            
+            // Save the evaluation to database for retrieval during exam submission
+            // This is CRITICAL for ensuring consistent scoring across views
+            try {
+                // Create a temporary evaluation entry that can be matched during exam submission
+                EssayEvaluation evaluation = new EssayEvaluation(
+                    UUID.fromString("00000000-0000-0000-0000-000000000000"), // Temporary placeholder
+                    -1, // Temporary placeholder for question ID
+                    request.getEssay(),
+                    request.getTopic(),
+                    response.getScore(),
+                    response.getGrade(),
+                    response.getFeedback(),
+                    response.getStrengths(),
+                    response.getImprovements(),
+                    "AI"
+                );
+                
+                // Ensure the save operation completes successfully
+                EssayEvaluation savedEvaluation = essayEvaluationRepository.save(evaluation);
+                if (savedEvaluation != null && savedEvaluation.getId() != null) {
+                    System.out.println("ESSAY DB: Successfully saved AI evaluation with ID " + savedEvaluation.getId() + 
+                                     " and score " + response.getScore() + " for topic: " + request.getTopic());
+                } else {
+                    System.err.println("ESSAY DB: Save operation completed but evaluation may not have been persisted properly");
+                }
+                
+            } catch (Exception e) {
+                System.err.println("CRITICAL ERROR: Failed to save essay evaluation to database: " + e.getMessage());
+                e.printStackTrace();
+                // Don't fail the entire evaluation if just the database save fails
+                // The user still gets their evaluation, but it won't be reused during submission
+                System.err.println("WARNING: Essay evaluation will not be reused during submission due to database save failure");
+            }
+            
+            return response;
+        } catch (Exception e) {
+            System.err.println("Error during essay evaluation: " + e.getMessage());
+            
+            // Check if it's a rate limit error
+            if (e.getMessage().contains("Rate limit reached") || e.getMessage().contains("HTTP 429")) {
+                throw new RuntimeException("AI evaluation service is temporarily unavailable due to rate limits. Please try again later or contact support.", e);
+            } else {
+                throw new RuntimeException("Essay evaluation failed due to a technical issue. Please try again later or contact support.", e);
+            }
+        }
     }
-    
+
     private String createEssayEvaluationPrompt(String topic, String essay, String criteria) {
         String defaultCriteria = criteria != null && !criteria.trim().isEmpty() ? criteria :
             "Content relevance and accuracy, Writing clarity and organization, Grammar and language use, " +
@@ -776,16 +1064,122 @@ public class ExamService {
             
         } catch (Exception e) {
             System.err.println("Error parsing essay evaluation: " + e.getMessage());
-            // Provide fallback evaluation
-            response.setScore(75);
-            response.setMaxScore(100);
-            response.setGrade("B");
-            response.setFeedback("Your essay shows good understanding of the topic with clear writing. Continue to develop your arguments with more specific examples and evidence.");
-            response.setStrengths("Clear writing style and good topic understanding.");
-            response.setImprovements("Add more specific examples and develop arguments further.");
+            System.err.println("AI Response that failed to parse: " + aiResponse);
+            throw new RuntimeException("AI evaluation service returned an invalid response. Please try again later or contact support if the issue persists.", e);
         }
         
         return response;
+    }
+    
+    /**
+     * Safely truncate text to fit database field constraints
+     * This is a temporary solution until the database schema is updated
+     */
+    private String safeTruncateText(String text, int maxLength) {
+        if (text == null) return null;
+        if (text.length() <= maxLength) return text;
+        
+        // Truncate and add indicator
+        return text.substring(0, maxLength - 5) + "[...]";
+    }
+    
+    private int parseScoreFromResponse(String response) {
+        if (response == null || response.trim().isEmpty()) return -1;
+
+        String trimmed = response.trim();
+
+        // 1) Try JSON parsing: look for { "score": X, "maxScore": Y }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(trimmed);
+            if (root != null && root.has("score")) {
+                double score = root.get("score").asDouble(0.0);
+                double max = 100.0;
+                if (root.has("maxScore")) max = root.get("maxScore").asDouble(100.0);
+                else if (root.has("max_score")) max = root.get("max_score").asDouble(100.0);
+
+                // Scale to 0-10 range
+                double scaled = (max > 0) ? (score * 10.0 / max) : score;
+                int intScore = (int) Math.round(scaled);
+                return Math.max(0, Math.min(10, intScore));
+            }
+        } catch (Exception ex) {
+            // Not JSON or parse failed - fall through to numeric extraction
+        }
+
+        // 2) Extract first numeric token using regex (safer than strip all digits which can concatenate numbers)
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+\\.?\\d*)").matcher(trimmed);
+        if (m.find()) {
+            try {
+                double num = Double.parseDouble(m.group(1));
+                // If AI returned a 0-100 score, scale down to 0-10
+                if (num > 10 && num <= 100) {
+                    num = num / 10.0;
+                }
+                // If it's already 0-10, keep as is. If it's larger than 100, treat as invalid.
+                if (num < 0 || num > 10) return -1;
+                int intScore = (int) Math.round(num);
+                return Math.max(0, Math.min(10, intScore));
+            } catch (Exception e) {
+                return -1;
+            }
+        }
+
+        return -1;
+    }
+    
+    private String cleanDisplayAnswer(String answer) {
+        if (answer == null || answer.trim().isEmpty()) {
+            return "";
+        }
+        
+        // Remove any remaining artifacts or unwanted characters
+        String cleaned = answer.trim();
+        
+        // Remove any leftover score patterns that might have been missed
+        cleaned = cleaned.replaceAll("\\[Score:.*?\\]", "").trim();
+        
+        // Remove SUBJECTIVE: prefix if still present
+        if (cleaned.startsWith("SUBJECTIVE:")) {
+            cleaned = cleaned.substring("SUBJECTIVE:".length()).trim();
+        }
+        
+        // Remove percentage patterns like "50.0%"
+        cleaned = cleaned.replaceAll("^\\d+\\.?\\d*%\\s*", "").trim();
+        
+        // Remove isolated single characters that are likely artifacts (except meaningful letters/words)
+        if (cleaned.length() == 1) {
+            char c = cleaned.charAt(0);
+            // Keep meaningful single characters like A, B, C, D (for multiple choice) but remove artifacts
+            if (!Character.isLetterOrDigit(c) || (Character.isLetter(c) && !("ABCD".contains(cleaned.toUpperCase())))) {
+                cleaned = "";
+            }
+        }
+        
+        // Remove common artifacts that appear due to parsing issues
+        cleaned = cleaned.replaceAll("^[sS]\\s*$", "").trim(); // Remove standalone 's' character
+        cleaned = cleaned.replaceAll("^[0-9.]+\\s*$", "").trim(); // Remove standalone numbers
+        
+        return cleaned;
+    }
+    
+    /**
+     * Calculate letter grade from percentage using consistent thresholds
+     */
+    private String calculateGrade(double percentage) {
+        if (percentage >= 90) return "A";
+        if (percentage >= 80) return "B"; 
+        if (percentage >= 70) return "C";
+        if (percentage >= 60) return "D";
+        return "F";
+    }
+    
+    /**
+     * Calculate letter grade from numeric score out of 10
+     */
+    private String calculateGradeFromScore(int score) {
+        double percentage = (score / 10.0) * 100.0;
+        return calculateGrade(percentage);
     }
 }
          

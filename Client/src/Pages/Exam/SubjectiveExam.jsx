@@ -13,6 +13,27 @@ const SubjectiveExam = () => {
   const [error, setError] = useState('');
   const [results, setResults] = useState(null); // { [questionId]: { score, feedback, grade } }
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalContent, setErrorModalContent] = useState({ title: '', message: '', isRetryable: false });
+
+  const showAIErrorModal = (errorMessage, isRetryable = true) => {
+    let title = 'AI Evaluation Failed';
+    let message = 'There was an issue with AI evaluation. Please try again.';
+    
+    if (errorMessage.includes('rate limit') || errorMessage.includes('temporarily unavailable')) {
+      title = 'AI Service Temporarily Unavailable';
+      message = 'The AI evaluation service is currently experiencing high demand. Please wait a few minutes and try again.';
+    } else if (errorMessage.includes('technical issue') || errorMessage.includes('invalid response')) {
+      title = 'AI Service Error';
+      message = 'The AI evaluation service encountered a technical issue. Please try again later or contact support if the problem persists.';
+    } else if (errorMessage.includes('failed due to a technical issue')) {
+      title = 'Evaluation Service Error';
+      message = 'Essay evaluation failed due to a technical issue. Please try again later or contact support.';
+    }
+    
+    setErrorModalContent({ title, message, isRetryable });
+    setShowErrorModal(true);
+  };
 
   useEffect(() => {
     let active = true;
@@ -49,6 +70,11 @@ const SubjectiveExam = () => {
       return;
     }
 
+    if (answer.trim().length < 30) {
+      alert('Please provide a more detailed answer (at least 30 characters) for proper evaluation.');
+      return;
+    }
+
     setEvaluating(true);
     try {
       const question = questions.find(q => q.id === questionId);
@@ -57,10 +83,14 @@ const SubjectiveExam = () => {
         essay: answer
       });
 
+      // Store raw and scaled scores locally so UI can show consistent values
+      const rawScore = response.data.score || 0;
+      const scaledScore = Math.round(rawScore / 10.0);
       setResults(prev => ({
         ...prev,
         [questionId]: {
-          score: response.data.score,
+          score: rawScore,
+          scaledScore: scaledScore,
           feedback: response.data.feedback,
           grade: response.data.grade
         }
@@ -72,7 +102,9 @@ const SubjectiveExam = () => {
       }
     } catch (error) {
       console.error('Error evaluating answer:', error);
-      alert('Failed to evaluate answer. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to evaluate answer';
+      
+      showAIErrorModal(errorMessage, true);
     } finally {
       setEvaluating(false);
     }
@@ -85,64 +117,80 @@ const SubjectiveExam = () => {
       return;
     }
 
+    // Check if all answers are properly evaluated with detailed validation
+    const unevaluatedQuestions = questions.filter(q => {
+      const result = results?.[q.id];
+      return !result || typeof result.score !== 'number' || result.score < 0;
+    });
+    
+    if (unevaluatedQuestions.length > 0) {
+      const questionNumbers = unevaluatedQuestions.map((q, index) => 
+        questions.findIndex(quest => quest.id === q.id) + 1
+      ).join(', ');
+      
+      showAIErrorModal(
+        `Please evaluate all your answers individually before submitting the complete exam. Questions ${questionNumbers} need proper evaluation.`,
+        false
+      );
+      return;
+    }
+
+    // Additional validation: ensure all scores are reasonable
+    const invalidScores = Object.entries(results).filter(([questionId, result]) => {
+      return !result || typeof result.score !== 'number' || result.score < 0 || result.score > 100;
+    });
+    
+    if (invalidScores.length > 0) {
+      console.error('Invalid scores detected:', invalidScores);
+      showAIErrorModal(
+        'Some evaluations appear to be invalid. Please re-evaluate your answers before submitting.',
+        false
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Evaluate all unevaluated answers
-      const unevaluatedQuestions = questions.filter(q => !results || !results[q.id]);
-      let updatedResults = { ...results };
+      // Debug logging for score calculation
+      console.log('=== SUBMISSION DEBUG ===');
+      console.log('Results:', results);
       
-      for (const question of unevaluatedQuestions) {
-        const answer = answers[question.id];
-        try {
-          const response = await API.post('/exam/evaluate-essay', {
-            topic: question.questionText,
-            essay: answer
-          });
+      const scoreDetails = Object.entries(results).map(([questionId, result]) => {
+        const raw = result?.score || 0;
+        const scaled = Math.round(raw / 10.0);
+        console.log(`Question ${questionId}: raw=${raw}, scaled=${scaled}`);
+        return { questionId, raw, scaled };
+      });
+      
+      const totalScaledScore = scoreDetails.reduce((sum, detail) => sum + detail.scaled, 0);
+      const maxScaledPossible = questions.length * 10; // each question 0-10
+      const overallPercentage = maxScaledPossible > 0 ? (totalScaledScore * 100.0 / maxScaledPossible) : 0.0;
+      
+      console.log(`Total scaled score: ${totalScaledScore}/${maxScaledPossible} = ${overallPercentage}%`);
+      console.log('========================');
 
-          updatedResults[question.id] = {
-            score: response.data.score,
-            feedback: response.data.feedback,
-            grade: response.data.grade
-          };
-        } catch (error) {
-          console.error(`Error evaluating question ${question.id}:`, error);
-          // If evaluation fails, assign a default score
-          updatedResults[question.id] = {
-            score: 0,
-            feedback: 'Error occurred during evaluation. Please try again.',
-            grade: 'F'
-          };
-        }
-      }
-
-      // Update results state
-      setResults(updatedResults);
-
-      // Calculate overall score
-      const totalScore = Object.values(updatedResults).reduce((sum, result) => sum + (result.score || 0), 0);
-      const averageScore = questions.length > 0 ? totalScore / questions.length : 0;
-
-      // For subjective exams, we'll format the submission to work with existing endpoint
-      // We'll use the answer text as the "selected" value for subjective questions
+      // Format the submission with the actual essay content and evaluation results
       const formattedAnswers = questions.map(question => ({
         questionId: question.id,
-        selected: `SUBJECTIVE:${averageScore.toFixed(1)}%` // Store the score in the selected field
+        selected: JSON.stringify({
+          essay: answers[question.id],
+          score: results[question.id]?.score || 0, // raw 0-100
+          scaledScore: Math.round((results[question.id]?.score || 0) / 10.0), // scaled 0-10
+          grade: results[question.id]?.grade || 'F',
+          feedback: results[question.id]?.feedback || ''
+        })
       }));
 
-      try {
-        await API.post(`/exam/${examId}/submit`, formattedAnswers);
-      } catch (submitError) {
-        // Store results locally if submission fails
-      }
+      await API.post(`/exam/${examId}/submit`, formattedAnswers);
 
-      // Store results for display
+      // Store results for display with correct percentage calculation
       const examResults = {
         examId: examId,
         questions: questions,
         answers: answers,
-        evaluations: updatedResults,
-        overallScore: Math.round(averageScore),
-        overallGrade: getLetterGrade(averageScore),
+        evaluations: results,
+        overallScore: Math.round(overallPercentage),
+        overallGrade: getLetterGrade(overallPercentage),
         submittedAt: new Date().toISOString()
       };
 
@@ -151,7 +199,15 @@ const SubjectiveExam = () => {
       navigate(`/exam/${examId}/subjective-results`);
     } catch (error) {
       console.error('Error submitting exam:', error);
-      alert('Failed to submit exam. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to submit exam';
+      
+      if (errorMessage.includes('evaluate your answers individually')) {
+        alert('Please evaluate all your answers individually before submitting the complete exam. Some answers may not have been properly evaluated.');
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('temporarily unavailable')) {
+        alert('Submission failed due to AI evaluation being temporarily unavailable. Please ensure all answers are evaluated individually first.');
+      } else {
+        alert('Failed to submit exam: ' + errorMessage + '. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -353,7 +409,7 @@ const SubjectiveExam = () => {
         </div>
 
         {/* Submit All Button */}
-        {answeredCount === totalQuestions && (
+        {answeredCount === totalQuestions && evaluatedCount === totalQuestions && (
           <div className="text-center">
             <button
               onClick={handleSubmitAllAnswers}
@@ -364,7 +420,80 @@ const SubjectiveExam = () => {
             </button>
           </div>
         )}
+
+        {/* Message when not all answers are evaluated */}
+        {answeredCount === totalQuestions && evaluatedCount < totalQuestions && (
+          <div className="text-center">
+            <div className="bg-yellow-600/20 border border-yellow-600 rounded-lg p-4 mb-4">
+              <p className="text-yellow-200 font-medium">
+                Please evaluate all your answers individually before submitting the complete exam.
+              </p>
+              <p className="text-yellow-300 text-sm mt-1">
+                {evaluatedCount}/{totalQuestions} answers evaluated
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* AI Error Modal */}
+      {showErrorModal && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-gray-800/95 backdrop-blur-sm border border-red-500/30 rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-500/20 border border-red-500/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-2">
+                {errorModalContent.title}
+              </h3>
+              
+              <p className="text-gray-300 mb-6 leading-relaxed">
+                {errorModalContent.message}
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                {errorModalContent.isRetryable && (
+                  <button
+                    onClick={() => {
+                      setShowErrorModal(false);
+                      // Auto-retry after modal closes
+                      setTimeout(() => {
+                        const currentQuestion = questions[currentQuestionIndex];
+                        if (currentQuestion && answers[currentQuestion.id]) {
+                          handleSubmitAnswer(currentQuestion.id);
+                        }
+                      }, 500);
+                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Try Again
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setShowErrorModal(false)}
+                  className="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg font-medium transition-colors duration-200"
+                >
+                  Close
+                </button>
+              </div>
+              
+              {errorModalContent.isRetryable && (
+                <div className="mt-4 text-sm text-gray-400">
+                  💡 <strong>Tip:</strong> You can also try evaluating your answer again manually using the "Evaluate Answer" button.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Loading Overlay */}
       {(evaluating || submitting) && (

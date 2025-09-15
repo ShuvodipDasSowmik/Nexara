@@ -14,19 +14,27 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
+import com.nxt.nxt.entity.Comment;
 import com.nxt.nxt.entity.Post;
 import com.nxt.nxt.entity.PostVote;
-import com.nxt.nxt.entity.Comment;
 import com.nxt.nxt.entity.Student;
+import com.nxt.nxt.repositories.CommentRepository;
 import com.nxt.nxt.repositories.PostRepository;
 import com.nxt.nxt.repositories.PostVoteRepository;
-import com.nxt.nxt.repositories.CommentRepository;
 import com.nxt.nxt.repositories.StudentRepository;
 import com.nxt.nxt.util.EmbeddingAPI;
-import com.nxt.nxt.util.VectorDB;
 import com.nxt.nxt.util.PostRankScorer;
+import com.nxt.nxt.util.VectorDB;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -125,7 +133,25 @@ public class PostController {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String username = auth.getName();
 
-            System.out.println("Getting personalized posts for user: " + username);
+            System.out.println("Getting posts for user: " + username);
+
+            // Quick fallback: If embedding API is failing, just return all posts
+            // This prevents API rate limiting from breaking the entire feature
+            try {
+                // Test if embedding API is working with a small test
+                List<Double> testEmbedding = embeddingAPI.getTextEmbedding("test");
+                if (testEmbedding.isEmpty()) {
+                    throw new RuntimeException("Embedding API is not available");
+                }
+            } catch (Exception e) {
+                String errorMessage = e.getMessage();
+                if (errorMessage != null && errorMessage.contains("TooManyRequestsError")) {
+                    System.out.println("Cohere API rate limit reached - serving posts without personalization");
+                } else {
+                    System.out.println("Embedding API unavailable - serving posts without personalization: " + errorMessage);
+                }
+                return getAllPostsWithoutPersonalization();
+            }
 
             // Create dummy vector for getting all entries by keyword (Cohere embed-english-v3.0 is 1024-dimensional)
             List<Double> dummyVector = new ArrayList<>();
@@ -138,8 +164,6 @@ public class PostController {
             List<String> userPdfTexts = vectorDB.getSimilar(dummyVector, username, "pdfdata", 1000);
             List<String> userChatTexts = vectorDB.getSimilar(dummyVector, username, "chat", 1000);
 
-            System.out.println("User Embedding Generation Done");
-
             List<String> allUserTexts = new ArrayList<>();
             allUserTexts.addAll(userPostTexts);
             allUserTexts.addAll(userPdfTexts);
@@ -148,15 +172,7 @@ public class PostController {
             // If no user data found, return all posts in chronological order
             if (allUserTexts.isEmpty()) {
                 System.out.println("No user data found in VectorDB for user: " + username + ", returning all posts");
-                List<Post> posts = postRepository.findAll();
-                List<PostWithStudentName> postsWithNames = posts.stream()
-                        .map(post -> {
-                            Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
-                            return new PostWithStudentName(post, studentName);
-                        })
-                        .toList();
-                return ResponseEntity.ok(postsWithNames);
+                return getAllPostsWithoutPersonalization();
             }
 
             // Calculate average embedding from all user's data
@@ -166,16 +182,7 @@ public class PostController {
 
             if (userAverageEmbedding.isEmpty()) {
                 System.out.println("Failed to calculate average embedding for user: " + username + ", returning all posts");
-                List<Post> posts = postRepository.findAll();
-
-                List<PostWithStudentName> postsWithNames = posts.stream()
-                        .map(post -> {
-                            Optional<Student> student = studentRepository.findById(post.getStudentId());
-                            String studentName = student.map(Student::getUsername).orElse("Unknown User");
-                            return new PostWithStudentName(post, studentName);
-                        })
-                        .toList();
-                return ResponseEntity.ok(postsWithNames);
+                return getAllPostsWithoutPersonalization();
             }
 
             // Step 2: Get all posts from VectorDB with "post" = TRUE
@@ -266,6 +273,23 @@ public class PostController {
         }
     }
 
+    private ResponseEntity<List<PostWithStudentName>> getAllPostsWithoutPersonalization() {
+        List<Post> posts = postRepository.findAll();
+        List<PostWithStudentName> postsWithNames = posts.stream()
+                .map(post -> {
+                    Optional<Student> student = studentRepository.findById(post.getStudentId());
+                    String studentName = student.map(Student::getUsername).orElse("Unknown User");
+                    return new PostWithStudentName(post, studentName);
+                })
+                .toList();
+        
+        // Add header to indicate personalization is disabled
+        return ResponseEntity.ok()
+                .header("X-Personalization-Status", "disabled")
+                .header("X-Personalization-Reason", "API rate limit reached")
+                .body(postsWithNames);
+    }
+
     private List<Double> calculateAverageEmbedding(List<String> texts) {
         if (texts.isEmpty()) {
             return new ArrayList<>();
@@ -273,18 +297,33 @@ public class PostController {
 
         try {
             List<List<Double>> embeddings = new ArrayList<>();
+            int successfulEmbeddings = 0;
+            int totalTexts = texts.size();
             
-            // Get embeddings for all texts
+            // Get embeddings for all texts with better error handling
             for (String text : texts) {
                 if (text != null && !text.trim().isEmpty()) {
-                    List<Double> embedding = embeddingAPI.getTextEmbedding(text.trim());
-                    if (!embedding.isEmpty()) {
-                        embeddings.add(embedding);
+                    try {
+                        List<Double> embedding = embeddingAPI.getTextEmbedding(text.trim());
+                        if (!embedding.isEmpty()) {
+                            embeddings.add(embedding);
+                            successfulEmbeddings++;
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to get embedding for text, skipping: " + e.getMessage());
+                        // Continue with other texts
                     }
+                }
+                
+                // If too many failures, abort to prevent endless API calls
+                if (successfulEmbeddings == 0 && embeddings.size() > totalTexts / 2) {
+                    System.err.println("Too many embedding failures, aborting average calculation");
+                    return new ArrayList<>();
                 }
             }
 
             if (embeddings.isEmpty()) {
+                System.err.println("No successful embeddings generated");
                 return new ArrayList<>();
             }
 
@@ -303,6 +342,7 @@ public class PostController {
                 averageEmbedding.set(i, averageEmbedding.get(i) / embeddings.size());
             }
 
+            System.out.println("Successfully calculated average embedding from " + embeddings.size() + " texts");
             return averageEmbedding;
         } catch (Exception e) {
             System.err.println("Error calculating average embedding: " + e.getMessage());

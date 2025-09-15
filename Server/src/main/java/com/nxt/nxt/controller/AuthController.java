@@ -14,10 +14,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.nxt.nxt.entity.User;
 import com.nxt.nxt.entity.Student;
-import com.nxt.nxt.repositories.UserRepository;
+import com.nxt.nxt.entity.User;
 import com.nxt.nxt.repositories.StudentRepository;
+import com.nxt.nxt.repositories.UserRepository;
 import com.nxt.nxt.security.JWTUtil;
 
 import jakarta.servlet.http.Cookie;
@@ -238,8 +238,8 @@ public class AuthController {
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
                 
-                // Also get the corresponding student information
-                Optional<Student> studentOpt = studentRepo.findByUsername(username);
+                // Get the corresponding student information using the user ID relationship
+                Optional<Student> studentOpt = studentRepo.findByUserId(user.getId());
                 
                 // Create a response with both user and student information
                 Map<String, Object> response = new HashMap<>();

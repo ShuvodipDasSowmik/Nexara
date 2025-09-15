@@ -1,16 +1,16 @@
 package com.nxt.nxt.util;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
 import com.cohere.api.Cohere;
 import com.cohere.api.resources.v2.requests.V2EmbedRequest;
 import com.cohere.api.types.EmbedByTypeResponse;
 import com.cohere.api.types.EmbedInputType;
 import com.cohere.api.types.EmbeddingType;
-
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 public class EmbeddingAPI {
@@ -52,8 +52,17 @@ public class EmbeddingAPI {
         }
         
         catch (Exception e) {
-            System.err.println("Error calling Cohere API: " + e.getMessage());
-            e.printStackTrace();
+            String errorMsg = e.getMessage();
+            
+            // Handle specific rate limit errors more gracefully
+            if (errorMsg != null && errorMsg.contains("TooManyRequestsError")) {
+                System.err.println("Cohere API rate limit exceeded - Trial key limit reached (1000 calls/month)");
+                System.err.println("Consider upgrading to Production key at https://dashboard.cohere.com/api-keys");
+            } else if (errorMsg != null && errorMsg.contains("429")) {
+                System.err.println("Cohere API rate limit exceeded");
+            } else {
+                System.err.println("Error calling Cohere API: " + errorMsg);
+            }
 
             return new ArrayList<>();
         }
