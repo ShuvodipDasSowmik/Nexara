@@ -27,11 +27,14 @@ public class StudentAnswer {
     @Column(name = "question_id", nullable = false)
     private Integer questionId;
 
-    @Column(name = "selected_answer", nullable = false)
+    @Column(name = "selected_answer", nullable = false, columnDefinition = "TEXT")
     private String selectedAnswer;
 
     @Column(name = "is_correct", nullable = false)
     private Boolean isCorrect;
+
+    @Column(name = "question_score", nullable = false)
+    private Integer questionScore = 0;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -45,6 +48,9 @@ public class StudentAnswer {
         this.selectedAnswer = selectedAnswer;
         this.isCorrect = isCorrect;
     }
+
+    public Integer getQuestionScore() { return questionScore; }
+    public void setQuestionScore(Integer questionScore) { this.questionScore = questionScore; }
 
     @PrePersist
     protected void onCreate() {

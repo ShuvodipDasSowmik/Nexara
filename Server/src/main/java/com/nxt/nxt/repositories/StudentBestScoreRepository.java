@@ -21,4 +21,7 @@ public interface StudentBestScoreRepository extends JpaRepository<StudentBestSco
 
     @Query("SELECT s FROM StudentBestScore s WHERE s.studentId = :studentId ORDER BY s.createdAt DESC")
     List<StudentBestScore> findLast5ByStudentIdOrderByCreatedAtDesc(UUID studentId, org.springframework.data.domain.Pageable pageable);
+    
+    @Query("SELECT s FROM StudentBestScore s WHERE s.studentId = :studentId ORDER BY s.createdAt DESC")
+    List<StudentBestScore> findAllByStudentIdOrderByCreatedAtDesc(UUID studentId);
 }

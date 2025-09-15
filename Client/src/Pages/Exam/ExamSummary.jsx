@@ -118,6 +118,23 @@ const ExamSummary = () => {
               <div className="text-sm text-gray-400">Score</div>
             </div>
             <div className="bg-gray-800/60 rounded-lg p-4 text-center">
+              {(() => {
+                const types = new Set((summary.questions || []).map(q => q.questionType));
+                let label = 'Mixed';
+                if (types.size === 1) {
+                  label = types.has('subjective') ? 'Subjective' : 'Multiple Choice';
+                } else if (types.size === 0) {
+                  label = 'N/A';
+                }
+                return (
+                  <>
+                    <div className="text-2xl font-bold text-white">{label}</div>
+                    <div className="text-sm text-gray-400">Question Type</div>
+                  </>
+                );
+              })()}
+            </div>
+            <div className="bg-gray-800/60 rounded-lg p-4 text-center">
               <div className="text-2xl font-bold text-white">{summary.totalQuestions}</div>
               <div className="text-sm text-gray-400">Total Questions</div>
             </div>
@@ -126,12 +143,6 @@ const ExamSummary = () => {
                 {summary.percentage?.toFixed(1)}%
               </div>
               <div className="text-sm text-gray-400">Percentage</div>
-            </div>
-            <div className="bg-gray-800/60 rounded-lg p-4 text-center">
-              <div className={`text-lg font-bold ${getGradeColor()}`}>
-                {getGradeText()}
-              </div>
-              <div className="text-sm text-gray-400">Grade</div>
             </div>
           </div>
         </div>
@@ -167,14 +178,6 @@ const ExamSummary = () => {
                       <div className="text-gray-200 whitespace-pre-wrap">
                         {question.userAnswer || 'No answer provided'}
                       </div>
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-semibold text-blue-300">Score:</span> 
-                      <span className={`ml-2 font-semibold ${
-                        question.isCorrect ? 'text-green-400' : 'text-yellow-400'
-                      }`}>
-                        {question.correctAnswer}
-                      </span>
                     </div>
                   </div>
                 ) : (

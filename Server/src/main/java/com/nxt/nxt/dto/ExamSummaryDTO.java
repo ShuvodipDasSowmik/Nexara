@@ -9,17 +9,19 @@ public class ExamSummaryDTO {
     private Integer totalQuestions;
     private Integer score;
     private Double percentage;
+    private String overallGrade; // Overall letter grade for the exam
     private List<QuestionSummaryDTO> questions;
 
     public ExamSummaryDTO() {}
 
-    public ExamSummaryDTO(Integer examId, String title, String description, Integer totalQuestions, Integer score, Double percentage, List<QuestionSummaryDTO> questions) {
+    public ExamSummaryDTO(Integer examId, String title, String description, Integer totalQuestions, Integer score, Double percentage, String overallGrade, List<QuestionSummaryDTO> questions) {
         this.examId = examId;
         this.title = title;
         this.description = description;
         this.totalQuestions = totalQuestions;
         this.score = score;
         this.percentage = percentage;
+        this.overallGrade = overallGrade;
         this.questions = questions;
     }
 
@@ -41,6 +43,9 @@ public class ExamSummaryDTO {
 
     public Double getPercentage() { return percentage; }
     public void setPercentage(Double percentage) { this.percentage = percentage; }
+
+    public String getOverallGrade() { return overallGrade; }
+    public void setOverallGrade(String overallGrade) { this.overallGrade = overallGrade; }
 
     public List<QuestionSummaryDTO> getQuestions() { return questions; }
     public void setQuestions(List<QuestionSummaryDTO> questions) { this.questions = questions; }

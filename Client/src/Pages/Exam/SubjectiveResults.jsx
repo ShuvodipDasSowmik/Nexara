@@ -139,7 +139,8 @@ const SubjectiveResults = () => {
                       <div className="flex items-center gap-4">
                         <span className="text-gray-300">Score:</span>
                         <span className={`text-xl font-bold ${getScoreColor(evaluation.score)}`}>
-                          {evaluation.score}%
+                          {/* Show both scaled (0-10) and raw percent if available */}
+                          {evaluation.scaledScore !== undefined ? `${evaluation.scaledScore}/10` : `${evaluation.score}%`}
                         </span>
                         <span className="text-gray-300">Grade:</span>
                         <span className={`text-lg font-bold ${getGradeColor(evaluation.grade)}`}>

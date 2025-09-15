@@ -29,8 +29,8 @@ export default function LastFiveScoresChart() {
         <h2 className="text-xl font-bold text-white mb-4 tracking-wide">Last 5 Exam Scores</h2>
         <div className="flex items-center justify-center h-80 bg-gray-800/50 rounded-lg border border-gray-700">
           <div className="flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-            <p className="text-gray-400 text-sm">Loading exam scores...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-3"></div>
+            <p className="text-gray-400 text-sm font-medium">Loading exam scores...</p>
           </div>
         </div>
       </div>
@@ -44,8 +44,8 @@ export default function LastFiveScoresChart() {
         <h2 className="text-xl font-bold text-white mb-4 tracking-wide">Last 5 Exam Scores</h2>
         <div className="flex items-center justify-center h-80 bg-gray-800/50 rounded-lg border border-gray-700">
           <div className="text-center">
-            <div className="text-red-400 text-lg mb-2">⚠️</div>
-            <p className="text-red-400 font-medium">{error}</p>
+            <div className="text-red-400 text-xl mb-2">⚠️</div>
+            <p className="text-red-400 font-medium text-base">{error}</p>
             <p className="text-gray-500 text-sm mt-1">Please try refreshing the page</p>
           </div>
         </div>
@@ -60,8 +60,8 @@ export default function LastFiveScoresChart() {
         <h2 className="text-xl font-bold text-white mb-4 tracking-wide">Last 5 Exam Scores</h2>
         <div className="flex items-center justify-center h-80 bg-gray-800/50 rounded-lg border border-gray-700">
           <div className="text-center">
-            <div className="text-6xl mb-4">📊</div>
-            <p className="text-gray-400 font-medium text-lg mb-2">No exam scores yet</p>
+            <div className="text-5xl mb-3">📊</div>
+            <p className="text-gray-400 font-medium text-base mb-1">No exam scores yet</p>
             <p className="text-gray-500 text-sm">Take some exams to see your performance here!</p>
           </div>
         </div>

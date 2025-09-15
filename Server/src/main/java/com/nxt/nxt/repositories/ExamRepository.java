@@ -78,6 +78,20 @@ public class ExamRepository {
         }
     }
 
+    public java.util.List<Exam> findAllById(java.util.Set<Integer> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        
+        String placeholders = ids.stream()
+            .map(id -> "?")
+            .collect(java.util.stream.Collectors.joining(","));
+        
+        String sql = "SELECT * FROM exam WHERE id IN (" + placeholders + ")";
+        
+        return jdbc.query(sql, new BeanPropertyRowMapper<>(Exam.class), ids.toArray());
+    }
+
     public void deleteById(Integer id) {
         jdbc.update("DELETE FROM exam WHERE id = ?", id);
     }
