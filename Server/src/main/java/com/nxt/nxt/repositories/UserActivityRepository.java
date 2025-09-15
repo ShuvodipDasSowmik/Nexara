@@ -31,9 +31,7 @@ public class UserActivityRepository {
             a.setCountry(rs.getString("country"));
             a.setCity(rs.getString("city"));
             a.setRegionName(rs.getString("region_name"));
-            a.setZip(rs.getString("zip"));
-            // Some DBs' visitors table may not include zip or user_agent/created_at columns
-            // Read browser/os/device if present
+
             try { a.setBrowser(rs.getString("browser")); } catch (SQLException ignore) {}
             try { a.setOs(rs.getString("os")); } catch (SQLException ignore) {}
             try { a.setDevice(rs.getString("device")); } catch (SQLException ignore) {}
@@ -42,8 +40,6 @@ public class UserActivityRepository {
     }
 
     public void save(UserActivity a) {
-        if (a.getCreatedAt() == null) a.setCreatedAt(LocalDateTime.now());
-        // Use a portable upsert: check if row exists then INSERT or UPDATE to avoid dialect-specific syntax
         try {
             Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM visitors WHERE visitor_id = ?", Integer.class, a.getVisitorId());
             if (count != null && count > 0) {

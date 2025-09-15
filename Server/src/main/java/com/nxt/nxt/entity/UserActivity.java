@@ -1,6 +1,5 @@
 package com.nxt.nxt.entity;
 
-import java.time.LocalDateTime;
 
 public class UserActivity {
     private String visitorId;
@@ -8,15 +7,11 @@ public class UserActivity {
     private String country;
     private String city;
     private String regionName;
-    private String zip;
-    private String userAgent;
     private String browser;
     private String os;
     private String device;
-    private LocalDateTime createdAt;
 
     public UserActivity() {
-        this.createdAt = LocalDateTime.now();
     }
 
     // getters and setters
@@ -35,12 +30,6 @@ public class UserActivity {
     public String getRegionName() { return regionName; }
     public void setRegionName(String regionName) { this.regionName = regionName; }
 
-    public String getZip() { return zip; }
-    public void setZip(String zip) { this.zip = zip; }
-
-    public String getUserAgent() { return userAgent; }
-    public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
-
     public String getBrowser() { return browser; }
     public void setBrowser(String browser) { this.browser = browser; }
 
@@ -50,6 +39,4 @@ public class UserActivity {
     public String getDevice() { return device; }
     public void setDevice(String device) { this.device = device; }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

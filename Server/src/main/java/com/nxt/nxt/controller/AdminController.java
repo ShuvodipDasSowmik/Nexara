@@ -32,6 +32,11 @@ import com.nxt.nxt.repositories.UserActivityRepository;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -57,29 +62,93 @@ public class AdminController {
     }
 
     @PostMapping("/track-activity")
-    public ResponseEntity<?> trackActivity(@RequestBody TrackActivityRequest req, HttpServletRequest request) {
+    public ResponseEntity<?> trackActivity(@RequestBody Map<String, Object> reqBody, HttpServletRequest request) {
         try {
             String ip = request.getRemoteAddr();
-            String visitorId = req.getVisitorID();
-            String ua = request.getHeader("User-Agent");
+            String visitorId = reqBody.get("visitorID") != null ? String.valueOf(reqBody.get("visitorID")) : null;
 
-            // Minimal parsing - store raw UA, browser and device unknown for now
             UserActivity a = new UserActivity();
             a.setVisitorId(visitorId);
             a.setIpAddress(ip);
-            a.setUserAgent(ua != null ? ua : "Unknown");
-            a.setBrowser("Unknown");
-            a.setOs("Unknown");
-            a.setDevice("Unknown");
-            a.setCountry("Unknown");
-            a.setCity("Unknown");
-            a.setRegionName("Unknown");
-            a.setZip("Unknown");
+
+            String country = "Unknown";
+            String city = "Unknown";
+            String regionName = "Unknown";
+
+            try {
+                String geoUrl = String.format("https://free.freeipapi.com/api/json/%s", ip);
+                HttpClient client = HttpClient.newHttpClient();
+                HttpRequest httpReq = HttpRequest.newBuilder()
+                        .uri(URI.create(geoUrl))
+                        .GET()
+                        .header("Accept", "application/json")
+                        .build();
+
+                HttpResponse<String> geoRes = client.send(httpReq, HttpResponse.BodyHandlers.ofString());
+                if (geoRes.statusCode() == 200) {
+                    ObjectMapper mapper = new ObjectMapper();
+
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String,Object> geo = mapper.readValue(geoRes.body(), java.util.Map.class);
+
+                    if (geo != null) {
+                        Object c = geo.get("countryName");
+                        Object ci = geo.get("cityName");
+                        Object rn = geo.get("regionName");
+
+                        country = c != null ? String.valueOf(c) : country;
+                        city = ci != null ? String.valueOf(ci) : city;
+                        regionName = rn != null ? String.valueOf(rn) : regionName;
+                    }
+                }
+                else {
+                    System.err.println("Geo API returned status " + geoRes.statusCode());
+                }
+            }
+            catch (Exception ex) {
+                System.err.println("Failed to fetch geo data: " + ex.getMessage());
+            }
+
+            String browser = "Unknown";
+            String osName = "Unknown";
+            String device = "Unknown";
+
+            Object uaObj = reqBody.get("ua");
+
+            if (uaObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> uaMap = (Map<String, Object>) uaObj;
+
+                Object browserObj = uaMap.get("browser");
+
+                if (browserObj instanceof Map && ((Map)browserObj).get("name") != null) {
+                    browser = String.valueOf(((Map)browserObj).get("name"));
+                }
+
+                Object osObj = uaMap.get("os");
+                if (osObj instanceof Map && ((Map)osObj).get("name") != null) {
+                    osName = String.valueOf(((Map)osObj).get("name"));
+                }
+
+                Object deviceObj = uaMap.get("device");
+                if (deviceObj instanceof Map) {
+                    Object model = ((Map)deviceObj).get("model");
+                    device = String.valueOf(model);
+                }
+            }
+
+            a.setBrowser(browser);
+            a.setOs(osName);
+            a.setDevice(device);
+            a.setCountry(country);
+            a.setCity(city);
+            a.setRegionName(regionName);
 
             try { activityRepository.save(a); } catch (Exception ex) { System.err.println("Failed saving activity: " + ex.getMessage()); }
 
             return ResponseEntity.ok(Map.of("success", true));
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("success", false, "message", e.getMessage()));
         }
     }
@@ -102,7 +171,8 @@ public class AdminController {
                 "countryCounts", countryCounts,
                 "deviceCounts", deviceCounts
             ));
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "success", false,
                 "message", "Error fetching analytics"
@@ -146,7 +216,8 @@ public class AdminController {
             
             return ResponseEntity.ok(response);
             
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error during admin signup: " + e.getMessage());
             
             Map<String, Object> errorResponse = new HashMap<>();
@@ -352,7 +423,8 @@ public class AdminController {
             resp.put("errors", errors);
 
             return ResponseEntity.ok(resp);
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             System.err.println("Error sending emails: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("success", false, "message", "Failed to send emails"));
         }

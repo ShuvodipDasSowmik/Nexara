@@ -5,7 +5,7 @@ import Header from "../Components/SiteChrome/Header";
 import Footer from "../Components/SiteChrome/Footer";
 import MessageFormatter from "../Components/ChatComponents/MessageFormatter";
 
-const BASE_URL = "http://localhost:4000" || import.meta.env.VITE_BACKEND_URL;
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
 const features = [
     {
