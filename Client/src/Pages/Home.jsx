@@ -4,6 +4,7 @@ import axios from "axios";
 import Header from "../Components/SiteChrome/Header";
 import Footer from "../Components/SiteChrome/Footer";
 import MessageFormatter from "../Components/ChatComponents/MessageFormatter";
+import { useAuth } from "../Context/AuthContext";
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:4000";
 
@@ -69,6 +70,7 @@ const features = [
 
 const Home = () => {
     const navigate = useNavigate();
+    const { currentUser } = useAuth();
     const [youtubeUrl, setYoutubeUrl] = useState("");
     const [loading, setLoading] = useState(false);
     const [summary, setSummary] = useState("");
@@ -95,6 +97,16 @@ const Home = () => {
             );
         }
         setLoading(false);
+    };
+
+    const handleGetStarted = () => {
+        if (currentUser) {
+            // User is already logged in, redirect to dashboard or tools
+            navigate('/tools');
+        } else {
+            // User is not logged in, redirect to signup
+            navigate('/signup');
+        }
     };
 
     return (
@@ -137,10 +149,10 @@ const Home = () => {
                             )}
                             <div className="mt-4 flex gap-3">
                                 <button
-                                    onClick={() => navigate("/signup")}
+                                    onClick={handleGetStarted}
                                     className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg shadow hover:scale-105 transition"
                                 >
-                                    Get Started
+                                    {currentUser ? 'Go to Tools' : 'Get Started'}
                                 </button>
                             </div>
                         </div>
