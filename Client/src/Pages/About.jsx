@@ -17,8 +17,8 @@ const About = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4 py-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen from-gray-900 via-gray-800 to-gray-900 px-4 py-8">
+      <div className="max-w-6xl mx-auto">
         {/* Header Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text mb-4">

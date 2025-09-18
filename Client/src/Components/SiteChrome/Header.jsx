@@ -81,7 +81,7 @@ export default function Header() {
     const userToShow = currentUser || optimisticUser;
 
     return (
-        <header className="w-full px-4 py-3 bg-gradient-to-r from-blue-950 via-gray-900 to-gray-900 border-b border-gray-800/60 shadow-lg">
+        <header className="w-full px-4 py-4 bg-gradient-to-r from-blue-950 via-gray-900 to-gray-900 border-b border-gray-800/60 shadow-lg">
             <style>{`
                 @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0%); } }
                 @keyframes slideOutRight { from { transform: translateX(0%); } to { transform: translateX(100%); } }
