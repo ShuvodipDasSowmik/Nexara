@@ -90,7 +90,6 @@ export default function AuthPage() {
         delete payload.subject;
         delete payload.confirmPassword;
         delete payload.signinIdentifier;
-        delete payload.password;
 
         // Create account first
         await API.post('/auth/signup', payload);

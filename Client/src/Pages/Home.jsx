@@ -158,6 +158,18 @@ const Home = () => {
                         </div>
                     </div>
                 </section>
+                {/* JavaFest hackathon acknowledgement */}
+                <section className="relative z-10 w-full max-w-6xl mx-auto mt-8">
+                    <div className="bg-gradient-to-br from-gray-800/60 to-gray-900/70 rounded-xl p-6 shadow border border-gray-700/30 text-gray-200 flex flex-col items-center gap-4">
+                        <div className="flex-shrink-0">
+                            <img src="/javafest-2025-logo.png" alt="JavaFest 2025" className="h-36 w-auto" />
+                        </div>
+                        <div className="flex-1 mt-7">
+                            <h4 className="text-3xl text-center font-bold text-white">Therap JavaFest 2025 Hackathon Submission</h4>
+                        </div>
+                        
+                    </div>
+                </section>
 
                 <section className="relative z-10 w-full max-w-5xl mx-auto mt-2">
                     <h2 className="text-2xl font-bold text-white mb-6 text-center">Platform Features</h2>
