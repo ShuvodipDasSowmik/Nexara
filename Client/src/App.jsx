@@ -20,6 +20,7 @@ import Footer from './Components/SiteChrome/Footer'
 import Posts from './Pages/Community/Posts'
 import AdminAuth from './Pages/Admin/AdminAuth'
 import AdminDashboard from './Pages/Admin/AdminDashboard'
+import About from './Pages/About'
 import { useEffect } from 'react'
 import API from './API/axios'
 
@@ -124,6 +125,14 @@ function App() {
                 <>
                   <Header />
                   <Tools />
+                </>
+              }
+              />
+              <Route path="/about" element={
+                <>
+                  <Header />
+                  <About />
+                  <Footer />
                 </>
               }
               />
