@@ -218,6 +218,34 @@ export const PostsProvider = ({ children }) => {
         }));
     };
 
+    const updateComment = async (commentId, updatedContent) => {
+        try {
+            const response = await API.put(`/posts/comments/${commentId}`, {
+                content: updatedContent
+            });
+            
+            if (response.status === 200) {
+                return { success: true, comment: response.data };
+            }
+        } catch (error) {
+            console.error('Error updating comment:', error);
+            return { success: false, error: 'Failed to update comment. Please try again.' };
+        }
+    };
+
+    const deleteComment = async (commentId) => {
+        try {
+            const response = await API.delete(`/posts/comments/${commentId}`);
+            
+            if (response.status === 204 || response.status === 200) {
+                return { success: true };
+            }
+        } catch (error) {
+            console.error('Error deleting comment:', error);
+            return { success: false, error: 'Failed to delete comment. Please try again.' };
+        }
+    };
+
     const value = {
         posts,
         loading,
@@ -231,7 +259,9 @@ export const PostsProvider = ({ children }) => {
         updatePost,
         deletePost,
         handleVote,
-        updateCommentCount
+        updateCommentCount,
+        updateComment,
+        deleteComment
     };
 
     return (

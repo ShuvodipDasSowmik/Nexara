@@ -8,7 +8,7 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
     const [comments, setComments] = useState([]);
     const [loading, setLoading] = useState(false);
     const { user } = useAuth();
-    const { voteCounts, commentCounts, userVotes, handleVote: handleVoteFromContext, updateCommentCount } = usePosts();
+    const { voteCounts, commentCounts, userVotes, handleVote: handleVoteFromContext, updateCommentCount, updateComment, deleteComment } = usePosts();
 
     // Get current values from context
     const voteCount = voteCounts[post?.id] || 0;
@@ -55,7 +55,35 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
     const handleCommentAdded = () => {
         // Refresh comments locally and update context counts without re-fetching all posts
         fetchComments();
-        updateCommentCount(post.id, commentCount + 1);
+        updateCommentCount(post.id, true);
+    };
+
+    const handleCommentUpdated = async (commentId, updatedContent) => {
+        const result = await updateComment(commentId, updatedContent);
+        if (result.success) {
+            // Update the comment in local state
+            setComments(prevComments => 
+                prevComments.map(comment => 
+                    comment.id === commentId 
+                        ? { ...comment, content: updatedContent, updatedAt: new Date().toISOString() }
+                        : comment
+                )
+            );
+        }
+        return result;
+    };
+
+    const handleCommentDeleted = async (commentId) => {
+        const result = await deleteComment(commentId);
+        if (result.success) {
+            // Remove the comment from local state
+            setComments(prevComments => 
+                prevComments.filter(comment => comment.id !== commentId)
+            );
+            // Update comment count
+            updateCommentCount(post.id, false);
+        }
+        return result;
     };
 
     if (!isOpen || !post) return null;
@@ -148,6 +176,8 @@ const PostModal = ({ post, isOpen, onClose, onPostUpdate, showNotification, user
                             comments={comments}
                             loading={loading}
                             onCommentAdded={handleCommentAdded}
+                            onCommentUpdated={handleCommentUpdated}
+                            onCommentDeleted={handleCommentDeleted}
                             showNotification={showNotification}
                         />
                     </div>
