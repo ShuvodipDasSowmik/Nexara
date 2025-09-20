@@ -1,8 +1,7 @@
 ## Developers:
 
-Md. Kaisarul Islam Estey
-
-Shuvodip Das
+- Md. Kaisarul Islam Estey
+- Shuvodip Das
 
 Undergraduate Students, Dept. of CSE, BUET
 
@@ -27,6 +26,10 @@ https://nexara-ydil.vercel.app/
 https://docs.google.com/document/d/1-gH--bNKIUSYi9uuPrSnPfLPGE4VSLjKgMmKjk739ew/edit?usp=sharing
 
 **Find detailed algorithm, workflows, Database ERD, challanges and our proposed solution from the documentation presented with visual diagrams**
+
+### Presentation Video:
+
+https://www.youtube.com/watch?v=sMar8LkpqeU&t=8s
 
 ## Core Features:
 - Context Awareness [Implemented with Embedding Generation API, and Vector Database]
@@ -176,7 +179,7 @@ Admins can manage users, monitor visitor activity with analytics, and easily sen
 - To optimize this we had to store the User Embedding, and Post Embedding in the database. But, we used embeddings of size 1024 x 1024 in our project. Storing each embedding from each chat response, each post, each pdf would take up a whole lot of storage of our cloud hosted database with a 500 MB storage limit.
 
 
-# How we addressed it from the frontend:
+### How we addressed it from the frontend:
 
 - Since we used React in frontend, and React uses virtual DOM, which does not require refresh every time upon navigating to a new page, we saved the posts data in a React Context, that allows the frontend application to fetch the ranked posts [calculate embeddings] only once during a session.
 
